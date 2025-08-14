@@ -162,6 +162,26 @@ export default function BadmintonScheduler() {
   }
 
   // -----------------------------
+  // 신규만 대기열에 추가 (요청 기능)
+  // -----------------------------
+  function getAllNamesSet() {
+    const set = new Set();
+    participants.forEach((n) => set.add(n));
+    teamQueue.forEach((t) => t.forEach((n) => set.add(n)));
+    courts.forEach((c) => c.team?.forEach((n) => set.add(n)));
+    return set;
+  }
+
+  function addNamesNewOnly(rawOrList) {
+    const list = Array.isArray(rawOrList) ? rawOrList : parseNames(rawOrList);
+    const all = getAllNamesSet();
+    const newOnes = uniquePreserveOrder(list).filter((n) => !all.has(n));
+    if (newOnes.length === 0) return 0;
+    setParticipants((prev) => [...prev, ...newOnes]);
+    return newOnes.length;
+  }
+
+  // -----------------------------
   // Actions
   // -----------------------------
   function handleConfirmNames() {
@@ -521,7 +541,15 @@ export default function BadmintonScheduler() {
   }
 
   function handleRestOnce(name) {
-    setRestOnce((prev) => (prev.includes(name) ? prev : [...prev, name]));
+    setRestOnce((prev) => {
+      if (prev.includes(name)) {
+        // 이미 쉼 상태면 제거 (취소)
+        return prev.filter((n) => n !== name);
+      } else {
+        // 쉼 추가
+        return [...prev, name];
+      }
+    });
   }
 
   const stats = useMemo(() => {
@@ -538,6 +566,7 @@ export default function BadmintonScheduler() {
   // -----------------------------
   // Dev tests (console-only)
   // -----------------------------
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     try {
       const r1 = parseNames("A\nB\n\nC");
@@ -600,7 +629,14 @@ export default function BadmintonScheduler() {
     <div className="min-h-screen w-full bg-gray-50 text-gray-900">
       <header className="sticky top-0 z-10 bg-white border-b">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <h1 className="text-xl md:text-2xl font-bold">🏸 우주민턴 배드민턴 경기 매칭 도우미</h1>
+          <h1 className="text-xl md:text-2xl font-bold flex items-center gap-2">
+            <img
+              src={`${process.env.PUBLIC_URL}/logo512.png`}
+              alt="우주민턴 로고"
+              className="w-6 h-6"
+            />
+            우주민턴 경기매칭
+          </h1>
           <div className="flex items-center gap-2 text-sm">
             <span className="px-2 py-1 rounded-full bg-gray-100">총 인원: {stats.total}</span>
             <span className="px-2 py-1 rounded-full bg-gray-100">대기 인원: {stats.waitingPeople}</span>
@@ -620,6 +656,14 @@ export default function BadmintonScheduler() {
               placeholder={`예)\n김철수\n이영희\n...`}
               value={namesInput}
               onChange={(e) => setNamesInput(e.target.value)}
+              onKeyDown={(e) => {
+                // Enter = 현재 입력의 신규 인원만 대기열에 추가 (줄바꿈 원하면 Shift+Enter)
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  addNamesNewOnly(namesInput);
+                  setNamesInput("");
+                }
+              }}
             />
             <div className="flex items-center gap-2 mt-3">
               <button
@@ -628,6 +672,18 @@ export default function BadmintonScheduler() {
               >
                 확정 → 대기 인원에 반영
               </button>
+
+              <button
+                className="px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700"
+                onClick={() => {
+                  addNamesNewOnly(namesInput);
+                  setNamesInput("");
+                }}
+                title="현재 입력창의 이름들 중 아직 어디에도 없는 사람만 대기 인원 뒤에 추가"
+              >
+                대기열에 추가(중복 제외)
+              </button>
+
               <button
                 className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300"
                 onClick={() => setNamesInput("")}
@@ -635,7 +691,9 @@ export default function BadmintonScheduler() {
                 입력 초기화
               </button>
             </div>
-            <p className="text-xs text-gray-500 mt-2">동명이인은 한 번만 반영됩니다(대소문자 무시).</p>
+            <p className="text-xs text-gray-500 mt-2">
+              Enter로 추가, 줄바꿈은 Shift+Enter. 이미 대기/코트/대기팀에 있는 이름은 무시됩니다.
+            </p>
           </div>
 
           <div className="bg-white rounded-2xl shadow p-4">
@@ -913,7 +971,7 @@ export default function BadmintonScheduler() {
         </section>
       </main>
 
-      <footer className="text-center text-xs text-gray-400 py-6">© {new Date().getFullYear()} 우주민턴 배드민턴 경기 매칭 도우미</footer>
+      <footer className="text-center text-xs text-gray-400 py-6">© {new Date().getFullYear()} 우주민턴 경기매칭 </footer>
     </div>
   );
 }
