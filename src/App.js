@@ -488,6 +488,8 @@ export default function BadmintonScheduler() {
   // 참가자 컨테이너로 드롭
   function handleDropToParticipants(e) {
     e.preventDefault();
+    // 우선 대기 영역으로의 드롭이 버블되어 일반 대기열 처리가 중복되는 것을 방지
+    if (e.target.closest?.('[data-priority-area]')) return;
     const data = getDragData(e);
     if (!data) return;
     if (!canDrop(data, { type: "participants" })) return; // ✅ 자기영역 금지
@@ -807,6 +809,7 @@ export default function BadmintonScheduler() {
             {/* 우선 대기자 */}
             <div
               className="mb-4"
+              data-priority-area
               onDragOver={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
