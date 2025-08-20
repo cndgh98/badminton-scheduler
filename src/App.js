@@ -122,10 +122,10 @@ export default function BadmintonScheduler() {
   }
 
   // 이번 라운드에서 제외된(restOnce) 사람을 한 번 쉬고 나서 다시 participants로 돌려놓기
-  function mergeRestOnceBack(rest, participantsBefore, restOnceList) {
+  function mergeRestOnceBack(participantsBefore, restOnceList) {
     const restSet = new Set(restOnceList);
-    const justRested = participantsBefore.filter((p) => restSet.has(p)); // 기존 대기열에서 쉰 사람만 추출 (순서 보전)
-    return [...justRested, ...rest];
+    // 기존 대기열에서 쉰 사람만 추출 (순서 보전)
+    return participantsBefore.filter((p) => restSet.has(p));
   }
 
   // -----------------------------
@@ -316,7 +316,7 @@ export default function BadmintonScheduler() {
 
     // 👉 쉼 효과는 1회용: 팀짜기 직후 클리어
     // 그리고 '쉼' 했던 사람은 반드시 대기 인원으로 복귀시킨다.
-    const nextParticipants = mergeRestOnceBack(rest, participants, restOnce);
+    const nextParticipants = mergeRestOnceBack(participants, restOnce);
 
     setCourts(nextCourts);
     setTeamQueue(finalQueue);
@@ -414,6 +414,8 @@ export default function BadmintonScheduler() {
       }
       return [...filtered, name];
     });
+    // 드래그로 대기열에 추가될 때 우선 대기 목록에 남아 있는 경우 제거
+    setPriorityCarry((prev) => prev.filter((n) => n !== name));
   }
 
   function addToQueue(name, teamIndex, memberIndex) {
@@ -488,6 +490,8 @@ export default function BadmintonScheduler() {
   // 참가자 컨테이너로 드롭
   function handleDropToParticipants(e) {
     e.preventDefault();
+    // 우선 대기 영역으로의 드롭이 버블되어 일반 대기열 처리가 중복되는 것을 방지
+    if (e.target.closest?.('[data-priority-area]')) return;
     const data = getDragData(e);
     if (!data) return;
     if (!canDrop(data, { type: "participants" })) return; // ✅ 자기영역 금지
@@ -648,14 +652,13 @@ export default function BadmintonScheduler() {
       console.assert(eligiblePC.length === 1 && eligiblePC[0] === "B", "restOnce 우선순위 필터 실패");
       console.assert(eligiblePP.length === 2 && eligiblePP.includes("B") && eligiblePP.includes("C"), "restOnce 참여자 필터 실패");
 
-      // NEW: mergeRestOnceBack — 쉼 한 번 후에도 대기 인원에 남는지
+      // NEW: mergeRestOnceBack — 쉰 사람만 복귀하는지 확인
       const merged = (function () {
         const before = ["A", "B", "C", "D", "E"]; // A가 쉼
-        const rest = ["X", "Y"]; // 이번 라운드 남은 사람 가정
         const ro = ["A"];
-        return mergeRestOnceBack(rest, before, ro);
+        return mergeRestOnceBack(before, ro);
       })();
-      console.assert(merged.includes("A") && merged.length === 3, "mergeRestOnceBack 실패");
+      console.assert(merged.length === 1 && merged[0] === "A", "mergeRestOnceBack 실패");
 
       // NEW: canDrop 기본 동작 확인
       console.assert(canDrop({from:"queue",teamIndex:0},{type:"queue",teamIndex:0}) === false, "same queue must be blocked");
@@ -766,24 +769,23 @@ export default function BadmintonScheduler() {
               <button className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300" onClick={handleResetAll}>
                 전체 초기화
               </button>
-
-              <div className="mt-4 md:mt-0 md:ml-auto w-full md:w-auto">
-                <button
-                  className="px-4 py-3 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-700 w-full"
-                  onClick={handleMakeTeams}
-                  disabled={participants.length + priorityCarry.length - restOnce.length < 4}
-                  title={
-                    participants.length + priorityCarry.length - restOnce.length < 4
-                      ? "대기 인원이 4명 이상 필요합니다"
-                      : "대기 인원에서 팀을 묶고 코트/대기팀 배정"
-                  }
-                >
-                  팀 짜기 (랜덤/중복 최소화 + 우선순위/쉼 반영)
-                </button>
-                {participants.length + priorityCarry.length - restOnce.length < 4 && (
-                  <p className="text-xs text-gray-500 mt-2">4명 미만이면 팀을 만들 수 없습니다.</p>
-                )}
-              </div>
+            </div>
+            <div className="mt-4 w-full md:w-auto">
+              <button
+                className="px-4 py-3 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-700 w-full"
+                onClick={handleMakeTeams}
+                disabled={participants.length + priorityCarry.length - restOnce.length < 4}
+                title={
+                  participants.length + priorityCarry.length - restOnce.length < 4
+                    ? "대기 인원이 4명 이상 필요합니다"
+                    : "대기 인원에서 팀을 묶고 코트/대기팀 배정"
+                }
+              >
+                팀 짜기 (랜덤/중복 최소화 + 우선순위/쉼 반영)
+              </button>
+              {participants.length + priorityCarry.length - restOnce.length < 4 && (
+                <p className="text-xs text-gray-500 mt-2">4명 미만이면 팀을 만들 수 없습니다.</p>
+              )}
             </div>
           </div>
         </section>
@@ -807,6 +809,7 @@ export default function BadmintonScheduler() {
             {/* 우선 대기자 */}
             <div
               className="mb-4"
+              data-priority-area
               onDragOver={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
