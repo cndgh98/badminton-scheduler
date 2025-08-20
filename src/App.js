@@ -414,6 +414,8 @@ export default function BadmintonScheduler() {
       }
       return [...filtered, name];
     });
+    // 드래그로 대기열에 추가될 때 우선 대기 목록에 남아 있는 경우 제거
+    setPriorityCarry((prev) => prev.filter((n) => n !== name));
   }
 
   function addToQueue(name, teamIndex, memberIndex) {
