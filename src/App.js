@@ -769,24 +769,23 @@ export default function BadmintonScheduler() {
               <button className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300" onClick={handleResetAll}>
                 전체 초기화
               </button>
-
-              <div className="mt-4 md:mt-0 md:ml-auto w-full md:w-auto">
-                <button
-                  className="px-4 py-3 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-700 w-full"
-                  onClick={handleMakeTeams}
-                  disabled={participants.length + priorityCarry.length - restOnce.length < 4}
-                  title={
-                    participants.length + priorityCarry.length - restOnce.length < 4
-                      ? "대기 인원이 4명 이상 필요합니다"
-                      : "대기 인원에서 팀을 묶고 코트/대기팀 배정"
-                  }
-                >
-                  팀 짜기 (랜덤/중복 최소화 + 우선순위/쉼 반영)
-                </button>
-                {participants.length + priorityCarry.length - restOnce.length < 4 && (
-                  <p className="text-xs text-gray-500 mt-2">4명 미만이면 팀을 만들 수 없습니다.</p>
-                )}
-              </div>
+            </div>
+            <div className="mt-4 w-full md:w-auto">
+              <button
+                className="px-4 py-3 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-700 w-full"
+                onClick={handleMakeTeams}
+                disabled={participants.length + priorityCarry.length - restOnce.length < 4}
+                title={
+                  participants.length + priorityCarry.length - restOnce.length < 4
+                    ? "대기 인원이 4명 이상 필요합니다"
+                    : "대기 인원에서 팀을 묶고 코트/대기팀 배정"
+                }
+              >
+                팀 짜기 (랜덤/중복 최소화 + 우선순위/쉼 반영)
+              </button>
+              {participants.length + priorityCarry.length - restOnce.length < 4 && (
+                <p className="text-xs text-gray-500 mt-2">4명 미만이면 팀을 만들 수 없습니다.</p>
+              )}
             </div>
           </div>
         </section>
