@@ -122,10 +122,10 @@ export default function BadmintonScheduler() {
   }
 
   // 이번 라운드에서 제외된(restOnce) 사람을 한 번 쉬고 나서 다시 participants로 돌려놓기
-  function mergeRestOnceBack(rest, participantsBefore, restOnceList) {
+  function mergeRestOnceBack(participantsBefore, restOnceList) {
     const restSet = new Set(restOnceList);
-    const justRested = participantsBefore.filter((p) => restSet.has(p)); // 기존 대기열에서 쉰 사람만 추출 (순서 보전)
-    return [...justRested, ...rest];
+    // 기존 대기열에서 쉰 사람만 추출 (순서 보전)
+    return participantsBefore.filter((p) => restSet.has(p));
   }
 
   // -----------------------------
@@ -316,7 +316,7 @@ export default function BadmintonScheduler() {
 
     // 👉 쉼 효과는 1회용: 팀짜기 직후 클리어
     // 그리고 '쉼' 했던 사람은 반드시 대기 인원으로 복귀시킨다.
-    const nextParticipants = mergeRestOnceBack(rest, participants, restOnce);
+    const nextParticipants = mergeRestOnceBack(participants, restOnce);
 
     setCourts(nextCourts);
     setTeamQueue(finalQueue);
@@ -652,14 +652,13 @@ export default function BadmintonScheduler() {
       console.assert(eligiblePC.length === 1 && eligiblePC[0] === "B", "restOnce 우선순위 필터 실패");
       console.assert(eligiblePP.length === 2 && eligiblePP.includes("B") && eligiblePP.includes("C"), "restOnce 참여자 필터 실패");
 
-      // NEW: mergeRestOnceBack — 쉼 한 번 후에도 대기 인원에 남는지
+      // NEW: mergeRestOnceBack — 쉰 사람만 복귀하는지 확인
       const merged = (function () {
         const before = ["A", "B", "C", "D", "E"]; // A가 쉼
-        const rest = ["X", "Y"]; // 이번 라운드 남은 사람 가정
         const ro = ["A"];
-        return mergeRestOnceBack(rest, before, ro);
+        return mergeRestOnceBack(before, ro);
       })();
-      console.assert(merged.includes("A") && merged.length === 3, "mergeRestOnceBack 실패");
+      console.assert(merged.length === 1 && merged[0] === "A", "mergeRestOnceBack 실패");
 
       // NEW: canDrop 기본 동작 확인
       console.assert(canDrop({from:"queue",teamIndex:0},{type:"queue",teamIndex:0}) === false, "same queue must be blocked");
