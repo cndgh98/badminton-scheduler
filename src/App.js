@@ -158,6 +158,9 @@ export default function BadmintonScheduler() {
     // 같은 코트 금지
     if (source.from === "court" && target.type === "court" && source.courtId === target.courtId) return false;
 
+    // 우선 대기자 → 우선 대기자 금지
+    if (source.from === "priority" && target.type === "priority") return false;
+
     return true;
   }
 
@@ -169,6 +172,7 @@ export default function BadmintonScheduler() {
     participants.forEach((n) => set.add(n));
     teamQueue.forEach((t) => t.forEach((n) => set.add(n)));
     courts.forEach((c) => c.team?.forEach((n) => set.add(n)));
+    priorityCarry.forEach((n) => set.add(n));
     return set;
   }
 
@@ -390,6 +394,14 @@ export default function BadmintonScheduler() {
       });
       return;
     }
+    if (state.from === "priority" && typeof state.fromIndex === "number") {
+      setPriorityCarry((prev) => {
+        const next = [...prev];
+        next.splice(state.fromIndex, 1);
+        return next;
+      });
+      return;
+    }
   }
 
   function addToParticipants(name, atIndex) {
@@ -463,6 +475,14 @@ export default function BadmintonScheduler() {
       });
       return;
     }
+    if (source.from === "priority" && typeof source.fromIndex === "number") {
+      setPriorityCarry((prev) => {
+        const next = [...prev];
+        next.splice(source.fromIndex, 0, replaced);
+        return next;
+      });
+      return;
+    }
   }
 
   // 참가자 컨테이너로 드롭
@@ -524,6 +544,36 @@ export default function BadmintonScheduler() {
     const replaced = court?.team?.[memberIndex];
     removeFromSource(data);
     addToCourt(data.name, courtId, memberIndex);
+    if (replaced) returnReplacedToSource(replaced, data);
+  }
+
+  // 우선 대기자 컨테이너로 드롭 (맨 앞 추가)
+  function handleDropToPriorityContainer(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const data = getDragData(e);
+    if (!data) return;
+    if (!canDrop(data, { type: "priority" })) return;
+    removeFromSource(data);
+    setPriorityCarry((prev) => {
+      const filtered = prev.filter((n) => n !== data.name);
+      return [data.name, ...filtered];
+    });
+  }
+
+  // 우선 대기자 칩으로 드롭 (교체, 새로 온 사람을 맨 앞에 배치)
+  function handleDropToPriorityChip(e, memberIndex) {
+    e.preventDefault();
+    e.stopPropagation();
+    const data = getDragData(e);
+    if (!data) return;
+    if (!canDrop(data, { type: "priority" })) return;
+    const replaced = priorityCarry[memberIndex];
+    removeFromSource(data);
+    setPriorityCarry((prev) => {
+      const next = prev.filter((n, i) => i !== memberIndex && n !== data.name);
+      return [data.name, ...next];
+    });
     if (replaced) returnReplacedToSource(replaced, data);
   }
 
@@ -754,6 +804,52 @@ export default function BadmintonScheduler() {
             }}
             onDrop={handleDropToParticipants}
           >
+            {/* 우선 대기자 */}
+            <div
+              className="mb-4"
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const data = getDragData(e);
+                if (data && !canDrop(data, { type: "priority" })) {
+                  e.dataTransfer.dropEffect = "none";
+                } else {
+                  e.dataTransfer.dropEffect = "move";
+                }
+              }}
+              onDrop={handleDropToPriorityContainer}
+            >
+              <h3 className="font-semibold mb-2">우선 대기자 ({priorityCarry.length})</h3>
+              {priorityCarry.length === 0 ? (
+                <p className="text-sm text-gray-500">현재 우선 대기자가 없습니다.</p>
+              ) : (
+                <ul className="text-sm grid grid-cols-1 gap-1 max-h-48 overflow-auto pr-1">
+                  {priorityCarry.map((n, i) => (
+                    <li
+                      key={n + i}
+                      className="px-2 py-1 rounded-lg bg-amber-50 border border-amber-200"
+                      draggable
+                      onDragStart={(e) => setDragData(e, { name: n, from: "priority", fromIndex: i })}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const data = getDragData(e);
+                        if (data && !canDrop(data, { type: "priority" })) {
+                          e.dataTransfer.dropEffect = "none";
+                        } else {
+                          e.dataTransfer.dropEffect = "move";
+                        }
+                      }}
+                      onDrop={(e) => handleDropToPriorityChip(e, i)}
+                      title="드롭하면 이 자리와 교체됩니다"
+                    >
+                      {n}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
             <h3 className="font-semibold mb-2">대기 인원 ({participants.length})</h3>
             {participants.length === 0 ? (
               <p className="text-sm text-gray-500">현재 대기 인원이 없습니다.</p>
@@ -798,11 +894,6 @@ export default function BadmintonScheduler() {
                   );
                 })}
               </ul>
-            )}
-            {priorityCarry.length > 0 && (
-              <div className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
-                우선순위 잔여 인원: {priorityCarry.join(", ")}
-              </div>
             )}
           </div>
 
