@@ -7,11 +7,12 @@ export default function BadmintonScheduler() {
   const [namesInput, setNamesInput] = useState("");
   const [participants, setParticipants] = useState([]); // 대기 인원(개인)
   const [teamQueue, setTeamQueue] = useState([]); // 대기 팀(배열의 배열)
-  const [courts, setCourts] = useState([{ id: 1 }, { id: 2 }]);
+  const [courts, setCourts] = useState([{ id: 1, name: "코트 1" }, { id: 2, name: "코트 2" }]);
   const [courtCountInput, setCourtCountInput] = useState("2");
   const [lastTeamSigByPlayer, setLastTeamSigByPlayer] = useState({}); // {name: "A|B|C|D"}
   const [priorityCarry, setPriorityCarry] = useState([]); // 직전 라운드에서 남은 1~3명
   const [restOnce, setRestOnce] = useState([]); // "쉼"으로 표시되어 다음 1회 팀짜기에서 제외할 인원
+  const [playedCount, setPlayedCount] = useState({}); // { [name]: number } — 누적 경기 수
 
   // -----------------------------
   // Persistence (localStorage)
@@ -23,13 +24,22 @@ export default function BadmintonScheduler() {
       const s = JSON.parse(raw);
       if (Array.isArray(s.participants)) setParticipants(s.participants);
       if (Array.isArray(s.teamQueue)) setTeamQueue(s.teamQueue);
-      if (Array.isArray(s.courts)) setCourts(s.courts);
+      if (Array.isArray(s.courts)) {
+        // 과거 저장분 호환: name 없으면 기본값 부여
+        const normalized = s.courts.map((c, idx) => ({
+          id: typeof c.id === "number" ? c.id : idx + 1,
+          name: c.name ?? `코트 ${typeof c.id === "number" ? c.id : idx + 1}`,
+          team: Array.isArray(c.team) ? c.team : undefined,
+        }));
+        setCourts(normalized);
+      }
       if (typeof s.courtCountInput === "string") setCourtCountInput(s.courtCountInput);
       if (typeof s.namesInput === "string") setNamesInput(s.namesInput);
       if (s.lastTeamSigByPlayer && typeof s.lastTeamSigByPlayer === "object")
         setLastTeamSigByPlayer(s.lastTeamSigByPlayer);
       if (Array.isArray(s.priorityCarry)) setPriorityCarry(s.priorityCarry);
       if (Array.isArray(s.restOnce)) setRestOnce(s.restOnce);
+      if (s.playedCount && typeof s.playedCount === "object") setPlayedCount(s.playedCount);
     } catch {
       // ignore
     }
@@ -45,9 +55,10 @@ export default function BadmintonScheduler() {
       lastTeamSigByPlayer,
       priorityCarry,
       restOnce,
+      playedCount,
     };
     localStorage.setItem("badminton_state_v1", JSON.stringify(payload));
-  }, [participants, teamQueue, courts, courtCountInput, namesInput, lastTeamSigByPlayer, priorityCarry, restOnce]);
+  }, [participants, teamQueue, courts, courtCountInput, namesInput, lastTeamSigByPlayer, priorityCarry, restOnce, playedCount]);
 
   // -----------------------------
   // Helpers (pure)
@@ -77,11 +88,49 @@ export default function BadmintonScheduler() {
     const a = [...arr];
     for (let i = a.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
+      [a[i], a[j]] = [a[j], a[i]]; // ✅ 올바른 스왑
     }
     return a;
   }
+  // --- Weighted helpers: 경기 수가 적을수록 높은 확률 ---
+  function getCount(name) {
+    return playedCount[name] ?? 0;
+  }
+  function weightOf(name) {
+    // 경기 수가 적을수록 큰 가중치. 1/(count+1) 형태
+    return 1 / (getCount(name) + 1);
+  }
 
+  // 누적합으로 룰렛휠 방식 한 명 뽑기 (index 반환)
+  function weightedPickIndex(items, weightFn) {
+    const weights = items.map(weightFn);
+    const total = weights.reduce((a, b) => a + b, 0);
+    if (total <= 0) return Math.floor(Math.random() * items.length);
+    let r = Math.random() * total;
+    for (let i = 0; i < items.length; i++) {
+      r -= weights[i];
+      if (r <= 0) return i;
+    }
+    return items.length - 1;
+  }
+
+  // 가중치 무작위 추출(중복 없이) k명
+  function weightedSampleWithoutReplacement(list, k, weightFn) {
+    const pool = [...list];
+    const picked = [];
+    while (pool.length > 0 && picked.length < k) {
+      const idx = weightedPickIndex(pool, weightFn);
+      picked.push(pool[idx]);
+      pool.splice(idx, 1);
+    }
+    return [picked, pool]; // [선택된 k명(또는 부족), 남은 풀]
+  }
+
+  function avgCount(team) {
+    if (!team || team.length === 0) return Infinity;
+    const s = team.reduce((acc, n) => acc + getCount(n), 0);
+    return s / team.length;
+  }
   function teamSignature(team) {
     return [...team].sort((a, b) => a.localeCompare(b)).join("|");
   }
@@ -122,10 +171,10 @@ export default function BadmintonScheduler() {
   }
 
   // 이번 라운드에서 제외된(restOnce) 사람을 한 번 쉬고 나서 다시 participants로 돌려놓기
-  function mergeRestOnceBack(rest, participantsBefore, restOnceList) {
+  function mergeRestOnceBack(participantsBefore, restOnceList) {
     const restSet = new Set(restOnceList);
-    const justRested = participantsBefore.filter((p) => restSet.has(p)); // 기존 대기열에서 쉰 사람만 추출 (순서 보전)
-    return [...justRested, ...rest];
+    // 기존 대기열에서 쉰 사람만 추출 (순서 보전)
+    return participantsBefore.filter((p) => restSet.has(p));
   }
 
   // -----------------------------
@@ -158,6 +207,9 @@ export default function BadmintonScheduler() {
     // 같은 코트 금지
     if (source.from === "court" && target.type === "court" && source.courtId === target.courtId) return false;
 
+    // 우선 대기자 → 우선 대기자 금지
+    if (source.from === "priority" && target.type === "priority") return false;
+
     return true;
   }
 
@@ -169,6 +221,7 @@ export default function BadmintonScheduler() {
     participants.forEach((n) => set.add(n));
     teamQueue.forEach((t) => t.forEach((n) => set.add(n)));
     courts.forEach((c) => c.team?.forEach((n) => set.add(n)));
+    priorityCarry.forEach((n) => set.add(n));
     return set;
   }
 
@@ -178,16 +231,28 @@ export default function BadmintonScheduler() {
     const newOnes = uniquePreserveOrder(list).filter((n) => !all.has(n));
     if (newOnes.length === 0) return 0;
     setParticipants((prev) => [...prev, ...newOnes]);
+    ensureCountsFor(newOnes);
     return newOnes.length;
   }
 
   // -----------------------------
   // Actions
   // -----------------------------
+  function ensureCountsFor(names) {
+    setPlayedCount((prev) => {
+      const next = { ...prev };
+      for (const n of names) {
+        if (next[n] == null) next[n] = 0;
+      }
+      return next;
+    });
+  }
+
   function handleConfirmNames() {
     const raw = parseNames(namesInput);
     const uniq = uniquePreserveOrder(raw);
     setParticipants(uniq);
+    ensureCountsFor(uniq);
     setTeamQueue([]);
     setPriorityCarry([]); // 새 명단 확정 시 우선순위 잔여 인원 초기화
     setRestOnce([]); // 쉼 목록도 초기화
@@ -202,7 +267,7 @@ export default function BadmintonScheduler() {
       // 확장
       const next = [...courts];
       const oldLen = next.length;
-      for (let i = oldLen + 1; i <= n; i++) next.push({ id: i });
+      for (let i = oldLen + 1; i <= n; i++) next.push({ id: i, name: `코트 ${i}` });
       setCourts(next);
     } else {
       // 축소: 잘려나간 코트의 팀을 대기팀 앞으로
@@ -210,7 +275,13 @@ export default function BadmintonScheduler() {
       const survivors = courts.slice(0, n);
       const displacedTeams = toRemove.map((c) => c.team).filter(Boolean);
       const mergedQueue = [...displacedTeams, ...teamQueue];
-      setCourts(survivors.map((c, idx) => ({ id: idx + 1, team: c.team })));
+      setCourts(
+        survivors.map((c, idx) => ({
+          id: idx + 1,
+          name: c.name ?? `코트 ${idx + 1}`,
+          team: c.team,
+        }))
+      );
       setTeamQueue(mergedQueue);
     }
   }
@@ -219,75 +290,98 @@ export default function BadmintonScheduler() {
   function handleMakeTeams() {
     const restSet = new Set(restOnce);
 
-    // "쉼" 표시된 인원은 이번 1회 팀짜기에서 제외
+    // "쉼" 표시 제외
     const eligibleParticipants = participants.filter((p) => !restSet.has(p));
     const eligiblePriorityCarry = priorityCarry.filter((p) => !restSet.has(p));
 
     const totalAvailable = eligibleParticipants.length + eligiblePriorityCarry.length;
     if (totalAvailable < 4) {
-      // 한 번 제외만 해야 하므로, 여기서도 restOnce는 소모(클리어) → 다음엔 다시 참여 가능
       setRestOnce([]);
-      return; // 4명 미만이면 동작 X
+      return;
     }
 
-    // 1) 작업용 풀: priorityCarry(쉼 제외) 먼저, 나머지는 섞어서 뒤에
+    // 작업 풀
     const others = eligibleParticipants.filter((p) => !eligiblePriorityCarry.includes(p));
-    const shuffledOthers = shuffle(others);
+    let pool = [...others];
 
-    const newTeams = [];
+    // 결과 팀들: 우선대기자 기반 팀과 일반 팀을 분리 관리
+    const priorityTeamsOut = [];
+    const otherTeamsOut = [];
 
-    // 2) 첫 팀: eligiblePriorityCarry(1~3명) 기반 → 부족분은 shuffledOthers로 보충
-    let idxInOthers = 0;
-    let arr = [];
+    // 1) 우선대기자만으로 4명씩 먼저 팀 구성
+    let priorityList = [...eligiblePriorityCarry];
+    while (priorityList.length >= 4) {
+      let team = priorityList.slice(0, 4);
+      priorityList = priorityList.slice(4);
 
-    if (eligiblePriorityCarry.length > 0) {
-      const firstTeam = [...eligiblePriorityCarry];
-      while (firstTeam.length < 4 && idxInOthers < shuffledOthers.length) {
-        firstTeam.push(shuffledOthers[idxInOthers++]);
-      }
-      let tail = shuffledOthers.slice(idxInOthers);
-      const broken = isExactRepeatTeam(firstTeam) ? tryBreak(firstTeam, tail) : null;
-      const finalFirstTeam = broken ? broken[0] : firstTeam;
-      tail = broken ? broken[1] : tail;
-      newTeams.push(finalFirstTeam);
-      arr = tail; // 남은 사람들
-    } else {
-      // priorityCarry가 없다면 전원을 섞은 상태로 그대로 사용
-      arr = [...shuffledOthers];
+      // 동일 4인팀 방지 시도(풀에서 스왑)
+      let tail = [...pool];
+      const broken = isExactRepeatTeam(team) ? tryBreak(team, tail) : null;
+      team = broken ? broken[0] : team;
+      pool = broken ? broken[1] : pool;
+
+      priorityTeamsOut.push(team);
     }
 
-    // 3) 나머지 사람들(arr)로 랜덤+제약 팀 편성
-    while (arr.length >= 4) {
-      let group = arr.slice(0, 4);
-      let tail = arr.slice(4);
+    // 2) 우선대기자 잔여(1~3명) + 풀에서 가중치 보충(부족분)
+    if (priorityList.length > 0) {
+      const need = 4 - priorityList.length;
+      if (pool.length >= need) {
+        const [picked, rest] = weightedSampleWithoutReplacement(pool, need, weightOf);
+        let team = [...priorityList, ...picked];
+        let tail = rest;
+
+        const broken = isExactRepeatTeam(team) ? tryBreak(team, tail) : null;
+        team = broken ? broken[0] : team;
+        pool = broken ? broken[1] : tail;
+
+        priorityTeamsOut.push(team);
+        priorityList = []; // 모두 소진
+      }
+      // else: 채울 사람이 부족하면 이 잔여 우선대기자는 다음 라운드로 이월(아래 rest로 합침)
+    }
+
+    // 3) 나머지 풀에서 가중치로 일반 팀 구성
+    while (pool.length >= 4) {
+      const [picked, rest] = weightedSampleWithoutReplacement(pool, 4, weightOf);
+      let group = picked;
+      let tail = rest;
 
       if (isExactRepeatTeam(group)) {
         const broken = tryBreak(group, tail);
         if (broken) {
           [group, tail] = broken;
         } else {
-          if (arr.length > 4) {
-            arr = shuffle(arr);
+          if (pool.length > 4) {
+            pool = shuffle(pool); // fallback 재도전
             continue;
           }
           // 마지막 묶음이면 허용
         }
       }
 
-      newTeams.push(group);
-      arr = tail;
+      otherTeamsOut.push(group);
+      pool = tail;
     }
 
-    // 4) 이번 라운드 남는 0~3명 → 다음 라운드 우선순위로 저장
-    const rest = arr; // 길이 0~3
+    // 4) 이번 라운드 남는 인원(우선대기 잔여 + 일반 풀 잔여) → 다음 라운드 우선대기
+    const rest = [...priorityList, ...pool]; // 길이 0~3 예상
     setPriorityCarry(rest);
 
-    // 5) 코트 배정: 기존 대기팀 → 새로 만든 팀 순서
+    // 5) 코트 배정: 기존 대기팀 → 우선대기팀 → (평균 경기 수 낮은 순) 일반 새 팀
+    const sortedOther = [...otherTeamsOut].sort((a, b) => {
+      const sa = a.reduce((acc, n) => acc + (playedCount[n] ?? 0), 0);
+      const sb = b.reduce((acc, n) => acc + (playedCount[n] ?? 0), 0);
+      return sa - sb;
+    });
+
+    const newTeamsInOrder = [...priorityTeamsOut, ...sortedOther];
+
     const nextCourts = courts.map((c) => ({ ...c }));
     const existingQueue = [...teamQueue];
     const queueAfterAssign = [];
 
-    // 기존 대기팀 먼저 빈 코트에
+    // 기존 대기팀 먼저
     for (const c of nextCourts) {
       if (!c.team && existingQueue.length > 0) {
         const nextTeam = existingQueue.shift();
@@ -296,29 +390,27 @@ export default function BadmintonScheduler() {
       }
     }
 
-    // 그 다음 새 팀을 빈 코트에
+    // 우선대기 기반 팀과 일반 팀(정렬됨) 순서대로 배정
     let i = 0;
     for (const c of nextCourts) {
-      if (!c.team && i < newTeams.length) {
-        c.team = newTeams[i++];
+      if (!c.team && i < newTeamsInOrder.length) {
+        c.team = newTeamsInOrder[i++];
         markTeamAsStarted(c.team);
       }
     }
-
-    // 남는 새 팀은 대기열 뒤에
-    while (i < newTeams.length) queueAfterAssign.push(newTeams[i++]);
+    while (i < newTeamsInOrder.length) queueAfterAssign.push(newTeamsInOrder[i++]);
 
     const finalQueue = [...existingQueue, ...queueAfterAssign];
 
-    // 👉 쉼 효과는 1회용: 팀짜기 직후 클리어
-    // 그리고 '쉼' 했던 사람은 반드시 대기 인원으로 복귀시킨다.
-    const nextParticipants = mergeRestOnceBack(rest, participants, restOnce);
+    // 쉼은 1회용. 쉰 사람은 대기열로 복귀
+    const nextParticipants = mergeRestOnceBack(participants, restOnce);
 
     setCourts(nextCourts);
     setTeamQueue(finalQueue);
     setParticipants(nextParticipants);
-    setRestOnce([]); // 마지막에 비우기
+    setRestOnce([]);
   }
+
 
   // 코트별 [경기 종료]
   function handleFinishCourt(courtId) {
@@ -327,6 +419,15 @@ export default function BadmintonScheduler() {
 
     const nextCourts = courts.map((c) => ({ ...c }));
     const finishedTeam = nextCourts[idx].team || [];
+
+    // 경기수 +1
+    setPlayedCount((prev) => {
+      const next = { ...prev };
+      for (const name of finishedTeam) {
+        next[name] = (next[name] || 0) + 1;
+      }
+      return next;
+    });
 
     // 코트 비우고, 대기팀이 있으면 즉시 입장
     const existingQueue = [...teamQueue];
@@ -350,11 +451,12 @@ export default function BadmintonScheduler() {
     setNamesInput("");
     setParticipants([]);
     setTeamQueue([]);
-    setCourts([{ id: 1 }, { id: 2 }]);
+    setCourts([{ id: 1, name: "코트 1" }, { id: 2, name: "코트 2" }]);
     setCourtCountInput("2");
     setLastTeamSigByPlayer({});
     setPriorityCarry([]);
     setRestOnce([]);
+    setPlayedCount({});
     localStorage.removeItem("badminton_state_v1");
   }
 
@@ -390,6 +492,20 @@ export default function BadmintonScheduler() {
       });
       return;
     }
+    if (state.from === "priority" && typeof state.fromIndex === "number") {
+      setPriorityCarry((prev) => {
+        const next = [...prev];
+        next.splice(state.fromIndex, 1);
+        return next;
+      });
+      return;
+    }
+  }
+
+  function handleRenameCourt(courtId, name) {
+    setCourts((prev) =>
+      prev.map((c) => (c.id === courtId ? { ...c, name } : c))
+    );
   }
 
   function addToParticipants(name, atIndex) {
@@ -402,6 +518,10 @@ export default function BadmintonScheduler() {
       }
       return [...filtered, name];
     });
+    // 드래그로 대기열에 추가될 때 우선 대기 목록에 남아 있는 경우 제거
+    setPriorityCarry((prev) => prev.filter((n) => n !== name));
+    // 카운트 키 보장
+    ensureCountsFor([name]);
   }
 
   function addToQueue(name, teamIndex, memberIndex) {
@@ -418,6 +538,7 @@ export default function BadmintonScheduler() {
       next[teamIndex].push(name);
       return next;
     });
+    ensureCountsFor([name]);
   }
 
   function addToCourt(name, courtId, memberIndex) {
@@ -434,6 +555,7 @@ export default function BadmintonScheduler() {
       next[idx].team.push(name);
       return next;
     });
+    ensureCountsFor([name]);
   }
 
   function returnReplacedToSource(replaced, source) {
@@ -449,6 +571,7 @@ export default function BadmintonScheduler() {
         next[source.teamIndex].splice(source.memberIndex, 0, replaced);
         return next;
       });
+      ensureCountsFor([replaced]);
       return;
     }
     if (source.from === "court" && typeof source.courtId === "number" && typeof source.memberIndex === "number") {
@@ -461,6 +584,15 @@ export default function BadmintonScheduler() {
         }
         return next;
       });
+      ensureCountsFor([replaced]);
+      return;
+    }
+    if (source.from === "priority" && typeof source.fromIndex === "number") {
+      setPriorityCarry((prev) => {
+        const next = [...prev];
+        next.splice(source.fromIndex, 0, replaced);
+        return next;
+      });
       return;
     }
   }
@@ -468,6 +600,8 @@ export default function BadmintonScheduler() {
   // 참가자 컨테이너로 드롭
   function handleDropToParticipants(e) {
     e.preventDefault();
+    // 우선 대기 영역으로의 드롭이 버블되어 일반 대기열 처리가 중복되는 것을 방지
+    if (e.target.closest?.('[data-priority-area]')) return;
     const data = getDragData(e);
     if (!data) return;
     if (!canDrop(data, { type: "participants" })) return; // ✅ 자기영역 금지
@@ -524,6 +658,36 @@ export default function BadmintonScheduler() {
     const replaced = court?.team?.[memberIndex];
     removeFromSource(data);
     addToCourt(data.name, courtId, memberIndex);
+    if (replaced) returnReplacedToSource(replaced, data);
+  }
+
+  // 우선 대기자 컨테이너로 드롭 (맨 앞 추가)
+  function handleDropToPriorityContainer(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const data = getDragData(e);
+    if (!data) return;
+    if (!canDrop(data, { type: "priority" })) return;
+    removeFromSource(data);
+    setPriorityCarry((prev) => {
+      const filtered = prev.filter((n) => n !== data.name);
+      return [data.name, ...filtered];
+    });
+  }
+
+  // 우선 대기자 칩으로 드롭 (교체, 새로 온 사람을 맨 앞에 배치)
+  function handleDropToPriorityChip(e, memberIndex) {
+    e.preventDefault();
+    e.stopPropagation();
+    const data = getDragData(e);
+    if (!data) return;
+    if (!canDrop(data, { type: "priority" })) return;
+    const replaced = priorityCarry[memberIndex];
+    removeFromSource(data);
+    setPriorityCarry((prev) => {
+      const next = prev.filter((n, i) => i !== memberIndex && n !== data.name);
+      return [data.name, ...next];
+    });
     if (replaced) returnReplacedToSource(replaced, data);
   }
 
@@ -598,14 +762,13 @@ export default function BadmintonScheduler() {
       console.assert(eligiblePC.length === 1 && eligiblePC[0] === "B", "restOnce 우선순위 필터 실패");
       console.assert(eligiblePP.length === 2 && eligiblePP.includes("B") && eligiblePP.includes("C"), "restOnce 참여자 필터 실패");
 
-      // NEW: mergeRestOnceBack — 쉼 한 번 후에도 대기 인원에 남는지
+      // NEW: mergeRestOnceBack — 쉰 사람만 복귀하는지 확인
       const merged = (function () {
         const before = ["A", "B", "C", "D", "E"]; // A가 쉼
-        const rest = ["X", "Y"]; // 이번 라운드 남은 사람 가정
         const ro = ["A"];
-        return mergeRestOnceBack(rest, before, ro);
+        return mergeRestOnceBack(before, ro);
       })();
-      console.assert(merged.includes("A") && merged.length === 3, "mergeRestOnceBack 실패");
+      console.assert(merged.length === 1 && merged[0] === "A", "mergeRestOnceBack 실패");
 
       // NEW: canDrop 기본 동작 확인
       console.assert(canDrop({from:"queue",teamIndex:0},{type:"queue",teamIndex:0}) === false, "same queue must be blocked");
@@ -716,24 +879,23 @@ export default function BadmintonScheduler() {
               <button className="px-3 py-2 rounded-xl bg-gray-200 hover:bg-gray-300" onClick={handleResetAll}>
                 전체 초기화
               </button>
-
-              <div className="mt-4 md:mt-0 md:ml-auto w-full md:w-auto">
-                <button
-                  className="px-4 py-3 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-700 w-full"
-                  onClick={handleMakeTeams}
-                  disabled={participants.length + priorityCarry.length - restOnce.length < 4}
-                  title={
-                    participants.length + priorityCarry.length - restOnce.length < 4
-                      ? "대기 인원이 4명 이상 필요합니다"
-                      : "대기 인원에서 팀을 묶고 코트/대기팀 배정"
-                  }
-                >
-                  팀 짜기 (랜덤/중복 최소화 + 우선순위/쉼 반영)
-                </button>
-                {participants.length + priorityCarry.length - restOnce.length < 4 && (
-                  <p className="text-xs text-gray-500 mt-2">4명 미만이면 팀을 만들 수 없습니다.</p>
-                )}
-              </div>
+            </div>
+            <div className="mt-4 w-full md:w-auto">
+              <button
+                className="px-4 py-3 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-700 w-full"
+                onClick={handleMakeTeams}
+                disabled={participants.length + priorityCarry.length - restOnce.length < 4}
+                title={
+                  participants.length + priorityCarry.length - restOnce.length < 4
+                    ? "대기 인원이 4명 이상 필요합니다"
+                    : "대기 인원에서 팀을 묶고 코트/대기팀 배정"
+                }
+              >
+                팀 짜기 (랜덤/중복 최소화 + 우선순위/쉼 반영)
+              </button>
+              {participants.length + priorityCarry.length - restOnce.length < 4 && (
+                <p className="text-xs text-gray-500 mt-2">4명 미만이면 팀을 만들 수 없습니다.</p>
+              )}
             </div>
           </div>
         </section>
@@ -754,6 +916,53 @@ export default function BadmintonScheduler() {
             }}
             onDrop={handleDropToParticipants}
           >
+            {/* 우선 대기자 */}
+            <div
+              className="mb-4"
+              data-priority-area
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const data = getDragData(e);
+                if (data && !canDrop(data, { type: "priority" })) {
+                  e.dataTransfer.dropEffect = "none";
+                } else {
+                  e.dataTransfer.dropEffect = "move";
+                }
+              }}
+              onDrop={handleDropToPriorityContainer}
+            >
+              <h3 className="font-semibold mb-2">우선 대기자 ({priorityCarry.length})</h3>
+              {priorityCarry.length === 0 ? (
+                <p className="text-sm text-gray-500">현재 우선 대기자가 없습니다.</p>
+              ) : (
+                <ul className="text-sm grid grid-cols-1 gap-1 max-h-48 overflow-auto pr-1">
+                  {priorityCarry.map((n, i) => (
+                    <li
+                      key={n + i}
+                      className="px-2 py-1 rounded-lg bg-amber-50 border border-amber-200"
+                      draggable
+                      onDragStart={(e) => setDragData(e, { name: n, from: "priority", fromIndex: i })}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const data = getDragData(e);
+                        if (data && !canDrop(data, { type: "priority" })) {
+                          e.dataTransfer.dropEffect = "none";
+                        } else {
+                          e.dataTransfer.dropEffect = "move";
+                        }
+                      }}
+                      onDrop={(e) => handleDropToPriorityChip(e, i)}
+                      title="드롭하면 이 자리와 교체됩니다"
+                    >
+                      {n}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
             <h3 className="font-semibold mb-2">대기 인원 ({participants.length})</h3>
             {participants.length === 0 ? (
               <p className="text-sm text-gray-500">현재 대기 인원이 없습니다.</p>
@@ -773,6 +982,9 @@ export default function BadmintonScheduler() {
                       <div className="flex items-center gap-2">
                         <span className="text-gray-800">
                           {i + 1}. {n}
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">
+                          {playedCount[n] ?? 0}회
                         </span>
                         {resting && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">쉼</span>
@@ -798,11 +1010,6 @@ export default function BadmintonScheduler() {
                   );
                 })}
               </ul>
-            )}
-            {priorityCarry.length > 0 && (
-              <div className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
-                우선순위 잔여 인원: {priorityCarry.join(", ")}
-              </div>
             )}
           </div>
 
@@ -834,7 +1041,13 @@ export default function BadmintonScheduler() {
                     onDrop={(e) => handleDropToCourtContainer(e, court.id)}
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <div className="font-semibold">코트 {court.id}</div>
+                      <input
+                        className="font-semibold bg-transparent border-b border-dashed focus:outline-none focus:border-gray-400"
+                        value={court.name ?? `코트 ${court.id}`}
+                        onChange={(e) => handleRenameCourt(court.id, e.target.value)}
+                        placeholder={`코트 ${court.id}`}
+                        title="코트 이름을 입력하세요"
+                      />
                       <button
                         className={`px-3 py-1.5 rounded-xl border ${
                           court.team ? "bg-rose-600 text-white border-rose-600 hover:bg-rose-700" : "bg-gray-100 text-gray-500"
