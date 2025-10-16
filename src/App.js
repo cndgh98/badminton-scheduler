@@ -928,13 +928,15 @@ export default function BadmintonScheduler() {
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
+
                           <input
-                            className="font-semibold bg-transparent border-b border-dashed focus:outline-none focus:border-gray-400"
+                            className="font-semibold bg-transparent border-b border-dashed focus:outline-none focus:border-gray-400 max-w-[80px]"
                             value={court.name ?? `코트 ${court.id}`}
                             onChange={(e) => handleRenameCourt(court.id, e.target.value)}
                             placeholder={`코트 ${court.id}`}
                             title="코트 이름을 입력하세요"
                           />
+
                         </div>
                         <div className="flex items-center gap-2">
                           {/* 아이콘 토글 버튼 (수동 ON/OFF 유지) */}
@@ -952,8 +954,10 @@ export default function BadmintonScheduler() {
                           </button>
 
                           <button
-                            className={`px-3 py-1.5 text-sm rounded-xl border ${
-                              court.team ? "bg-rose-600 text-white border-rose-600 hover:bg-rose-700" : "bg-gray-100 text-gray-500"
+                            className={`px-2.5 py-1 text-sm rounded-xl border ${
+                              court.team
+                                ? "bg-rose-600 text-white border-rose-600 hover:bg-rose-700"
+                                : "bg-gray-100 text-gray-500"
                             }`}
                             onClick={() => handleFinishCourt(court.id)}
                             disabled={!court.team}
