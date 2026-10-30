@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Scheduler from './App';
 import GameBoard from './GameBoard';
-import { prepareGameState, playerInfo } from './gameState';
+import { prepareGameState } from './gameState';
+import MatchOverview from './MatchOverview';
 import { backend, koreaDate, loginEmail, unwrap } from './backend';
 import './OnlineApp.css';
 
@@ -27,17 +28,52 @@ export function Game({ meeting, roster, run, busy, reload, close }) {
   const version = useRef(meeting.game_version);
   const [dirty, setDirty] = useState(false);
   const initial = useRef(prepareGameState(meeting.game_state, roster));
-  const changed = useCallback(value => { draft.current = { ...value, playerProfiles: initial.current.playerProfiles }; setDirty(true); }, []);
+  const autoSaveRequested = useRef(false);
+  const saveAction = useRef(null);
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState('');
+  saveAction.current = snapshot => {
+    if (!snapshot || savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    setSaveStatus('saving');
+    return run(async () => {
+      try {
+        version.current = unwrap(await backend.rpc('save_game', { p_meeting: meeting.id, p_state: snapshot, p_version: version.current }));
+        setDirty(draft.current !== snapshot);
+        setSaveStatus('saved');
+        await reload();
+      } catch (error) {
+        setSaveStatus('failed');
+        throw error;
+      } finally {
+        savingRef.current = false;
+        setSaving(false);
+      }
+    });
+  };
+  const changed = useCallback(value => {
+    draft.current = { ...value, playerProfiles: initial.current.playerProfiles };
+    setDirty(true);
+    if (autoSaveRequested.current) {
+      autoSaveRequested.current = false;
+      saveAction.current(draft.current);
+    }
+  }, []);
   useEffect(() => {
     const protect = e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } };
     window.addEventListener('beforeunload', protect);
     return () => window.removeEventListener('beforeunload', protect);
   }, [dirty]);
-  return <><div className="game-toolbar"><button className="quiet" onClick={() => { if (!dirty || window.confirm('저장하지 않은 경기 변경을 버리고 나갈까요?')) close(); }}>← 모임으로</button><strong>{meeting.title}</strong><button disabled={busy || !dirty} onClick={() => run(async () => {
-    const snapshot = draft.current;
-    version.current = unwrap(await backend.rpc('save_game', { p_meeting: meeting.id, p_state: snapshot, p_version: version.current }));
-    setDirty(draft.current !== snapshot); await reload();
-  })}>경기 저장</button></div><p className="game-note">해당 모임의 참석 확정자를 대기 인원으로 불러왔습니다. 변경 후 ‘경기 저장’을 눌러주세요.</p><Scheduler initialState={initial.current} onStateChange={changed} renderGame={state => <GameBoard state={state} profiles={initial.current.playerProfiles} meeting={meeting} busy={busy} />} /></>;
+  return <><div className="game-toolbar"><button className="quiet" disabled={saving} onClick={() => { if (!dirty || window.confirm('저장하지 않은 경기 변경을 버리고 나갈까요?')) close(); }}>← 모임으로</button><strong>{meeting.title}</strong><button disabled={busy || saving || !dirty} onClick={() => saveAction.current(draft.current)}>{saving ? '저장 중…' : '경기 저장'}</button></div>
+    <p className="game-note">팀 편성 결과는 자동 저장됩니다. 선수 이동·경기 종료 등 다른 변경 후에는 ‘경기 저장’을 눌러주세요.</p>
+    <p className={`game-save-status ${saveStatus === 'failed' ? 'save-failed' : ''}`} role="status">{saveStatus === 'saving' ? '경기 결과를 저장하고 있습니다…' : saveStatus === 'failed' ? '저장하지 못했습니다. 변경은 화면에 유지됩니다. 경기 저장을 눌러 다시 시도하세요.' : saveStatus === 'saved' && !dirty ? '경기 저장 완료 · 회원에게 대기 순서가 공개됩니다.' : dirty ? '저장하지 않은 변경이 있습니다.' : ''}</p>
+    <Scheduler initialState={initial.current} onStateChange={changed} renderGame={state => <GameBoard state={{ ...state, handleMakeTeams: () => {
+      if (savingRef.current || autoSaveRequested.current) return;
+      autoSaveRequested.current = true;
+      state.handleMakeTeams();
+    } }} profiles={initial.current.playerProfiles} meeting={meeting} busy={busy || saving} />} /></>;
 }
 
 export default function OnlineApp() {
@@ -102,9 +138,9 @@ export default function OnlineApp() {
     <div className="club-grid"><section className="panel"><div className="month-nav"><button className="quiet" onClick={() => shiftMonth(-1)} aria-label="이전 달">←</button><h2>{month.replace('-', '년 ')}월</h2><button className="quiet" onClick={() => shiftMonth(1)} aria-label="다음 달">→</button></div><div className="calendar">{['일','월','화','수','목','금','토'].map(d => <span className="weekday" key={d}>{d}</span>)}{Array.from({ length: first }, (_, i) => <span key={`blank-${i}`} />)}{Array.from({ length: days }, (_, i) => { const date = `${month}-${String(i + 1).padStart(2, '0')}`; const count = meetings.filter(m => koreaDate(m.starts_at) === date && !m.cancelled).length; return <button key={date} aria-label={`${date}${count ? ` 모임 ${count}개` : ''}`} aria-pressed={day === date} className={`${day === date ? 'selected' : ''} ${date === koreaDate() ? 'today' : ''}`} onClick={() => setDay(day === date ? null : date)}>{i + 1}<span>{count ? '●' : '\u00a0'}</span></button>; })}</div><button className="quiet" onClick={() => setDay(null)}>이번 달 전체 보기</button><div className="meeting-list">{!visible.length && <p className="muted">등록된 모임이 없습니다.</p>}{visible.map(m => <button className={`meeting-item ${selected === m.id ? 'active' : ''}`} key={m.id} onClick={() => { setSelected(m.id); }}><span>{new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(m.starts_at))}</span><strong>{m.title}</strong><span>{m.cancelled ? '취소된 모임' : `${m.location} · ${attendance.filter(a => a.meeting_id === m.id && a.status === 'confirmed').length}/${m.capacity}명`}</span></button>)}</div></section>
     <section className="panel details">{!meeting ? <div className="empty"><span>🏸</span><h2>어떤 날 함께할까요?</h2><p>달력에서 모임을 선택해 주세요.</p></div> : <><span className="eyebrow">MEETING</span><h2>{meeting.title}</h2><p>{new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', dateStyle: 'full', timeStyle: 'short' }).format(new Date(meeting.starts_at))}</p><p>{meeting.location}</p><div className="capacity"><strong>참석 {confirmed} / {meeting.capacity}명</strong><span>대기 {waiting.length}명</span></div>
     {meeting.cancelled ? <p className="notice">취소된 모임입니다.</p> : <><button className="wide" disabled={busy || (!mine && new Date(meeting.starts_at) <= new Date())} onClick={() => run(async () => { unwrap(await backend.rpc('reserve', { p_meeting: meeting.id, p_cancel: Boolean(mine) })); await Promise.all([load(), loadRoster()]); })}>{mine ? mine.status === 'confirmed' ? '참석 취소' : `대기 ${waiting.findIndex(r => r.user_id === session.user.id) + 1 || '…'}번 · 대기 취소` : new Date(meeting.starts_at) <= new Date() ? '신청 마감' : confirmed >= meeting.capacity ? '대기 신청' : '참석하기'}</button><small>빈자리가 생기면 대기 신청 순서대로 자동 참석 처리됩니다. 정보는 15초마다 갱신됩니다.</small></>}
-    <h3>참석자</h3><div className="people">{roster.filter(r => r.status === 'confirmed').map(r => <span key={r.user_id}>{r.name}{r.user_id === session.user.id ? ' (나)' : ''}</span>)}{!confirmed && <p className="muted">첫 번째 참석자가 되어 주세요.</p>}</div><h3>대기 순서</h3><ol>{waiting.map(r => <li key={r.user_id}>{r.name}{r.user_id === session.user.id ? ' (나)' : ''}</li>)}</ol>
+    <h3>참석자</h3><div className="people">{roster.filter(r => r.status === 'confirmed').map(r => <span key={r.user_id}>{r.name}{r.user_id === session.user.id ? ' (나)' : ''}</span>)}{!confirmed && <p className="muted">첫 번째 참석자가 되어 주세요.</p>}</div><h3>모임 참석 대기 순서</h3>{waiting.length ? <ol className="reservation-waitlist">{waiting.map((r, index) => <li key={r.user_id}><strong>{index + 1}번</strong> {r.name}{r.user_id === session.user.id ? ' (나)' : ''}</li>)}</ol> : <p className="muted">모임 참석 대기자가 없습니다.</p>}
     {admin && !meeting.cancelled && <div className="admin-actions"><button disabled={busy || koreaDate(meeting.starts_at) !== koreaDate()} onClick={() => run(async () => { await Promise.all([load(), loadRoster()]); setGame(true); })}>경기 운영 시작</button><small>경기 운영은 한국 시간 기준 모임 당일에 열립니다.</small><button className="quiet danger" disabled={busy} onClick={() => { if (window.confirm('이 모임을 취소할까요?')) run(async () => { unwrap(await backend.rpc('cancel_meeting', { p_meeting: meeting.id })); await load(); }); }}>모임 취소</button></div>}
-    {meeting.game_state && <><h3>현재 코트</h3>{(meeting.game_state.courts || []).map(c => <div className="court-summary" key={c.id}><strong>{c.name}</strong><p>{c.team?.map(key => { const p = playerInfo(key, meeting.game_state.playerProfiles); return `${p.name}${p.gender ? ` (${p.gender})` : ''}`; }).join(' / ') || '대기 중'}</p></div>)}</>}
+    <MatchOverview gameState={meeting.game_state} userId={session.user.id} />
     <button className="quiet" disabled={busy} onClick={() => run(async () => { await Promise.all([load(), loadRoster()]); })}>최신 정보 새로고침</button></>}</section></div></>}
     <footer>우주민턴 · 함께 운동하는 우리들의 공간</footer></div>;
 }

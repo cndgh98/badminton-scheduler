@@ -56,3 +56,25 @@
 .court-summary { background:#f4f6f2; padding:14px; margin-bottom:8px; border-radius:9px; }
 .club footer { padding:35px 0; text-align:center; color:#819083; font-size:12px; }
 @media(max-width:720px) { .club { padding:0 16px; } .club-grid { grid-template-columns:1fr; gap:0; } .club-header { align-items:flex-start; } .club h1 span { display:block; margin:6px 0 0; } .club .account { flex-direction:column; gap:5px; align-items:flex-end; } .welcome { padding:26px 0; } .welcome h2 { font-size:23px; } .welcome p { font-size:13px; } .welcome>button { flex-shrink:0; padding:12px; } .panel { padding:18px; } .meeting-form { grid-template-columns:1fr; } .game-toolbar { flex-wrap:wrap; } }
+.game-save-status { min-height:22px; font-size:12px; color:#45703c; }
+.game-save-status.save-failed { color:#a33e30; }
+.match-overview { border-top:1px solid #dce4da; margin-top:28px; padding-top:12px; }
+.match-overview-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.match-overview-heading>span { color:#7a8b77; font-size:11px; }
+.match-overview h4 { font-weight:700; font-size:13px; margin:22px 0 12px; }
+.my-match-status { background:#e7f0d7; border-radius:10px; padding:14px; font-size:13px; }
+.match-people { display:flex; flex-wrap:wrap; gap:7px; margin-top:9px; }
+.match-person { display:inline-flex; align-items:center; gap:5px; background:#eef3e8; border-radius:7px; padding:7px 9px; font-size:12px; }
+.club .match-person small { display:inline; margin:0; font-size:10px; }
+.match-person.is-me { border:1px solid #6d9951; background:#e1edcf; }
+.match-person b { font-size:9px; color:#4e7c32; }
+.club .details .match-team-queue { list-style:none; padding:0; display:grid; gap:10px; }
+.club .details .match-team-queue>li { border:1px solid #dce4da; border-radius:10px; padding:14px; }
+.match-team-queue li>div:first-child { display:flex; align-items:center; gap:10px; }
+.match-team-queue li>div:first-child>span { font-size:11px; color:#7a8b77; }
+.club .details .match-team-queue>li.my-team { border-color:#83a85a; background:#f5f9ee; }
+.match-unassigned { display:flex; flex-wrap:wrap; gap:8px; }
+.match-unassigned>div { display:flex; flex-direction:column; gap:3px; }
+.priority-label { font-size:10px; color:#8c792d; text-align:center; }
+.club .details .reservation-waitlist { list-style:none; padding:0; }
+.reservation-waitlist strong { color:#688b3c; margin-right:6px; }
