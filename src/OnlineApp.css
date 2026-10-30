@@ -78,3 +78,14 @@
 .priority-label { font-size:10px; color:#8c792d; text-align:center; }
 .club .details .reservation-waitlist { list-style:none; padding:0; }
 .reservation-waitlist strong { color:#688b3c; margin-right:6px; }
+.member-game-actions { display:flex; align-items:flex-start; flex-wrap:wrap; gap:10px; margin-top:20px; }
+.member-request-actions { flex:1; min-width:220px; }
+.request-buttons { display:flex; flex-wrap:wrap; gap:8px; }
+.club .request-buttons button { padding:11px 13px; font-size:12px; }
+.request-feedback { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:10px; font-size:12px; color:#697d48; }
+.club .request-feedback button { padding:7px 10px; font-size:11px; }
+.admin-game-requests { background:#fff9e9; border:1px solid #e5d9ad; padding:18px; border-radius:14px; margin:16px 0; }
+.admin-game-requests h3 { margin:0 0 12px; font-size:16px; }
+.admin-game-requests article { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-top:1px solid #eee5c7; font-size:13px; }
+.club .admin-game-requests small { font-size:11px; margin-top:5px; }
+@media(max-width:720px) { .member-game-actions>.quiet { width:100%; } .member-request-actions { width:100%; } .admin-game-requests article { align-items:flex-start; flex-direction:column; } }

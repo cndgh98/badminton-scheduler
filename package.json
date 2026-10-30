@@ -23,7 +23,8 @@
     "predeploy": "npm run build",
     "deploy": "gh-pages -d build",
     "test": "react-scripts test",
-    "test:database": "node scripts/test-database.mjs"
+    "test:database": "node scripts/test-database.mjs",
+    "test:requests": "node scripts/test-game-requests.mjs"
   },
   "eslintConfig": {
     "extends": [

@@ -22,3 +22,9 @@ export function prepareGameState(saved, roster) {
 export function playerInfo(key, profiles = {}) {
   return profiles[key] || { name: key.replace(/ · [a-f0-9]{8}$/i, ''), gender: null };
 }
+
+export function gameStateFingerprint(state) {
+  return JSON.stringify(state, (_key, value) => value && typeof value === 'object' && !Array.isArray(value)
+    ? Object.keys(value).sort().reduce((out, key) => { out[key] = value[key]; return out; }, {})
+    : value);
+}
