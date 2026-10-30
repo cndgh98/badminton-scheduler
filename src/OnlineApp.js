@@ -203,6 +203,6 @@ export default function OnlineApp() {
     {requestError && <p role="alert">{requestError}</p>}
     {admin && meetingRequests.some(request => request.status === 'pending') && <p className="notice">확인할 회원 요청 {meetingRequests.filter(request => request.status === 'pending').length}건 · 경기 운영에서 승인·반려할 수 있습니다.</p>}
     <div className="member-game-actions"><button className="quiet" disabled={busy} onClick={() => run(async () => { await Promise.all([load(), loadRoster(), loadRequests()]); })}>최신 정보 새로고침</button>
-    {!admin && mine?.status === 'confirmed' && <MemberGameRequests meeting={meeting} requests={meetingRequests} ready={requestsReady} busy={busy} run={run} reload={async () => { await Promise.all([loadRequests(), load()]); }} userId={session.user.id} />}</div></>}</section></div></>}
+    <MemberGameRequests meeting={meeting} requests={meetingRequests} ready={requestsReady} busy={busy} run={run} reload={async () => { await Promise.all([loadRequests(), load()]); }} userId={session.user.id} attendanceStatus={mine?.status || null} /></div></>}</section></div></>}
     <footer>우주민턴 · 함께 운동하는 우리들의 공간</footer></div>;
 }
