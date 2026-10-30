@@ -72,3 +72,11 @@
  .operator-selection { top:80px; } .operator-selection~.operator-tabs { position:static; } .operator-section-title>span { font-size:10px; } .club .court-actions button { font-size:12px; padding:12px; }
 }
 .name-id { font-size:9px; font-weight:400; color:#81917b; }
+.waiting-tags { grid-template-columns:repeat(2,auto); align-items:center; }
+.waiting-tags>span { grid-column:1/-1; }
+.club .waiting-tags .exclude-player { color:#a34e40; border-color:#ead5cf; }
+.excluded-players { background:white; border:1px solid #dce4da; border-radius:12px; padding:14px 16px; margin-bottom:20px; }
+.excluded-players summary { font-size:13px; font-weight:700; cursor:pointer; }
+.excluded-players p { font-size:11px; color:#7d8b80; }
+.excluded-players>div { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:10px; font-size:13px; }
+.club .excluded-players button { font-size:11px; padding:8px 12px; }

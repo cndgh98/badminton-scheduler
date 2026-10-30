@@ -16,7 +16,7 @@ export default function MatchOverview({ gameState, userId }) {
     const p = playerInfo(key, profiles);
     return <span className={`match-person ${isMine(key) ? 'is-me' : ''}`} key={key}>{p.name}{p.gender && <small>{p.gender}</small>}{isMine(key) && <b>나</b>}</span>;
   }
-  const status = myCourt ? `${myCourt.name}에서 경기 중` : myTeam >= 0 ? `경기 대기 ${myTeam + 1}번 팀` : myWaiting ? priority.includes(myWaiting) ? '다음 팀 편성 우선 대기' : '팀 편성 대기 중' : null;
+  const status = myCourt ? `${myCourt.name}에서 경기 중` : myTeam >= 0 ? `경기 대기 ${myTeam + 1}번 팀` : myWaiting ? priority.includes(myWaiting) ? '다음 팀 편성 우선 대기' : '팀 편성 대기 중' : (gameState.excludedPlayers || []).some(isMine) ? '이번 모임 경기 참여 종료' : null;
   return <section className="match-overview" aria-label="경기 현황"><div className="match-overview-heading"><h3>실시간 경기 현황</h3><span>15초마다 갱신</span></div>
     {status && <p className="my-match-status" role="status">내 경기 상태 · <strong>{status}</strong></p>}
     <h4>현재 코트</h4>{courts.map(c => <article className="court-summary" key={c.id}><strong>{c.name}</strong><div className="match-people">{c.team?.length ? c.team.map(player) : <p className="muted">입장 대기</p>}</div></article>)}

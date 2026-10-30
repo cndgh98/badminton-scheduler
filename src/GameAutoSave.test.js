@@ -3,10 +3,10 @@ import { Game } from './OnlineApp';
 import { backend } from './backend';
 jest.mock('./backend', () => ({ ...jest.requireActual('./backend'), backend: { rpc: jest.fn() } }));
 const roster = Array.from({ length: 12 }, (_, i) => ({ user_id: `${String(i).padStart(8, '0')}-test`, name: `참석${i}`, gender: i % 2 ? '여성' : '남성', status: 'confirmed' }));
-function setup() {
+function setup(attendees = roster) {
   const errors = [];
   const reload = jest.fn().mockResolvedValue();
-  render(<Game meeting={{ id: 'm1', title: '오늘 모임', location: '체육관', starts_at: '2026-10-30T01:00:00Z', game_version: 3, game_state: null }} roster={roster} run={action => action().catch(e => errors.push(e.message))} busy={false} reload={reload} close={jest.fn()} />);
+  render(<Game meeting={{ id: 'm1', title: '오늘 모임', location: '체육관', starts_at: '2026-10-30T01:00:00Z', game_version: 3, game_state: null }} roster={attendees} run={action => action().catch(e => errors.push(e.message))} busy={false} reload={reload} close={jest.fn()} />);
   return { errors, reload };
 }
 beforeEach(() => backend.rpc.mockReset());
@@ -97,4 +97,40 @@ test('a no-op move does not block a subsequent valid auto-saved move', async () 
   fireEvent.click(screen.getAllByRole('button', { name: '+ 선수 배치' })[0]);
   await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
   expect(backend.rpc.mock.calls[0][1].p_state.courts[0].team).toEqual(['참석0 · 00000000']);
+});
+
+test('excluding a waiting player auto saves the exclusion and supports restoring participation', async () => {
+  backend.rpc.mockResolvedValueOnce({ data: 4, error: null }).mockResolvedValueOnce({ data: 5, error: null });
+  const { reload } = setup();
+  fireEvent.click(screen.getByRole('button', { name: '참석0 경기 제외' }));
+  await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+  const removed = backend.rpc.mock.calls[0][1].p_state;
+  expect(removed.excludedPlayers).toContain('참석0 · 00000000');
+  expect(removed.participants).not.toContain('참석0 · 00000000');
+  expect(screen.queryByRole('button', { name: '참석0 경기 제외' })).not.toBeInTheDocument();
+  expect(backend.rpc).toHaveBeenCalledWith('save_game', expect.anything());
+  fireEvent.click(screen.getByText('경기 제외 · 1명'));
+  fireEvent.click(screen.getByRole('button', { name: '참석0 다시 참여' }));
+  await waitFor(() => expect(reload).toHaveBeenCalledTimes(2));
+  const restored = backend.rpc.mock.calls[1][1];
+  expect(restored.p_version).toBe(4);
+  expect(restored.p_state.excludedPlayers).toEqual([]);
+  expect(restored.p_state.participants).toContain('참석0 · 00000000');
+});
+
+test('excluding a priority player also clears their one-round rest marker', async () => {
+  backend.rpc.mockResolvedValueOnce({ data: 4, error: null }).mockResolvedValueOnce({ data: 5, error: null });
+  const { reload } = setup(roster.slice(0, 6));
+  fireEvent.click(screen.getByText('🏸 팀 편성하기'));
+  await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+  const priority = backend.rpc.mock.calls[0][1].p_state.priorityCarry[0];
+  const name = priority.split(' · ')[0];
+  fireEvent.click(screen.getByRole('button', { name: `${name} 한 번 쉬기` }));
+  fireEvent.click(screen.getByRole('button', { name: `${name} 경기 제외` }));
+  await waitFor(() => expect(reload).toHaveBeenCalledTimes(2));
+  const saved = backend.rpc.mock.calls[1][1].p_state;
+  expect(saved.priorityCarry).not.toContain(priority);
+  expect(saved.restOnce).not.toContain(priority);
+  expect(saved.excludedPlayers).toContain(priority);
+  expect(saved.courts[0].team).toHaveLength(4);
 });

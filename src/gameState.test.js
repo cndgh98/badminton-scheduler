@@ -26,3 +26,11 @@ test('canceled waiting players are removed while ongoing court assignments remai
   expect(state.participants).toEqual([]);
   expect(state.courts[0].team).toEqual([playing]);
 });
+test('excluded attendees are not imported again when the same meeting is reopened', () => {
+  const roster = [player(1), player(2)];
+  const excluded = playerKey(roster[0]);
+  const saved = { ...prepareGameState(null, roster), excludedPlayers: [excluded] };
+  const reopened = prepareGameState(saved, roster);
+  expect(reopened.participants).toEqual([playerKey(roster[1])]);
+  expect(reopened.excludedPlayers).toEqual([excluded]);
+});

@@ -67,7 +67,7 @@ export function Game({ meeting, roster, run, busy, reload, close }) {
     return () => window.removeEventListener('beforeunload', protect);
   }, [dirty]);
   return <><div className="game-toolbar"><button className="quiet" disabled={saving} onClick={() => { if (!dirty || window.confirm('저장하지 않은 경기 변경을 버리고 나갈까요?')) close(); }}>← 모임으로</button><strong>{meeting.title}</strong><button disabled={busy || saving || !dirty} onClick={() => saveAction.current(draft.current)}>{saving ? '저장 중…' : '경기 저장'}</button></div>
-    <p className="game-note">팀 편성·선수 이동·경기 종료는 자동 저장됩니다. 코트 설정 등 다른 변경 후에는 ‘경기 저장’을 눌러주세요.</p>
+    <p className="game-note">팀 편성·선수 이동·경기 종료·경기 제외는 자동 저장됩니다. 코트 설정 등 다른 변경 후에는 ‘경기 저장’을 눌러주세요.</p>
     <p className={`game-save-status ${saveStatus === 'failed' ? 'save-failed' : ''}`} role="status">{saveStatus === 'saving' ? '경기 결과를 저장하고 있습니다…' : saveStatus === 'failed' ? '저장하지 못했습니다. 변경은 화면에 유지됩니다. 경기 저장을 눌러 다시 시도하세요.' : saveStatus === 'saved' && !dirty ? '경기 저장 완료 · 회원에게 대기 순서가 공개됩니다.' : dirty ? '저장하지 않은 변경이 있습니다.' : ''}</p>
     <Scheduler initialState={initial.current} onStateChange={changed} renderGame={state => {
       const autoSave = action => (...args) => {
@@ -80,6 +80,8 @@ export function Game({ meeting, roster, run, busy, reload, close }) {
         handleMakeTeams: autoSave(state.handleMakeTeams),
         movePlayer: autoSave(state.movePlayer),
         handleFinishCourt: autoSave(state.handleFinishCourt),
+        handleExcludePlayer: autoSave(state.handleExcludePlayer),
+        handleRestorePlayer: autoSave(state.handleRestorePlayer),
       }} profiles={initial.current.playerProfiles} meeting={meeting} busy={busy || saving} />;
     }} /></>;
 }

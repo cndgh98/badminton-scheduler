@@ -19,6 +19,7 @@ export default function BadmintonScheduler({ initialState, onStateChange, render
   const [courtCountInput, setCourtCountInput] = useState("2");
   const [lastTeamSigByPlayer, setLastTeamSigByPlayer] = useState({}); // {name: "A|B|C|D"}
   const [priorityCarry, setPriorityCarry] = useState([]); // 직전 라운드에서 남은 1~3명
+  const [excludedPlayers, setExcludedPlayers] = useState([]);
   const [restOnce, setRestOnce] = useState([]); // "쉼"으로 표시되어 다음 1회 팀짜기에서 제외할 인원
   const [playedCount, setPlayedCount] = useState({}); // { [name]: number } — 누적 경기 수
 
@@ -133,6 +134,7 @@ export default function BadmintonScheduler({ initialState, onStateChange, render
       if (s.lastTeamSigByPlayer && typeof s.lastTeamSigByPlayer === "object")
         setLastTeamSigByPlayer(s.lastTeamSigByPlayer);
       if (Array.isArray(s.priorityCarry)) setPriorityCarry(s.priorityCarry);
+      if (Array.isArray(s.excludedPlayers)) setExcludedPlayers(s.excludedPlayers);
       if (Array.isArray(s.restOnce)) setRestOnce(s.restOnce);
       if (s.playedCount && typeof s.playedCount === "object") setPlayedCount(s.playedCount);
       if (Array.isArray(s.disabledCourtsOnce)) setDisabledCourtsOnce(s.disabledCourtsOnce);
@@ -151,11 +153,12 @@ export default function BadmintonScheduler({ initialState, onStateChange, render
       lastTeamSigByPlayer,
       priorityCarry,
       restOnce,
+      excludedPlayers,
       playedCount,
       disabledCourtsOnce,
     };
     onStateChange?.(payload);
-  }, [participants, teamQueue, courts, courtCountInput, namesInput, lastTeamSigByPlayer, priorityCarry, restOnce, playedCount, disabledCourtsOnce, onStateChange]);
+  }, [participants, teamQueue, courts, courtCountInput, namesInput, lastTeamSigByPlayer, priorityCarry, restOnce, playedCount, disabledCourtsOnce, excludedPlayers, onStateChange]);
 
   // -----------------------------
   // DnD payload helpers
@@ -440,6 +443,7 @@ export default function BadmintonScheduler({ initialState, onStateChange, render
     setRestOnce([]);
     setPlayedCount({});
     setDisabledCourtsOnce([]);
+    setExcludedPlayers([]);
   }
 
   // ---------- DnD: 공통 조작 ----------
@@ -680,6 +684,20 @@ export default function BadmintonScheduler({ initialState, onStateChange, render
     setPriorityCarry((prev) => prev.filter((n) => n !== name));
   }
 
+  function handleExcludePlayer(name) {
+    if (!participants.includes(name) && !priorityCarry.includes(name)) return;
+    setParticipants(prev => prev.filter(player => player !== name));
+    setPriorityCarry(prev => prev.filter(player => player !== name));
+    setRestOnce(prev => prev.filter(player => player !== name));
+    setExcludedPlayers(prev => [...new Set([...prev, name])]);
+  }
+
+  function handleRestorePlayer(name) {
+    if (!excludedPlayers.includes(name)) return;
+    setExcludedPlayers(prev => prev.filter(player => player !== name));
+    setParticipants(prev => [...new Set([...prev, name])]);
+  }
+
   function handleRestOnce(name) {
     setRestOnce((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
   }
@@ -728,9 +746,9 @@ export default function BadmintonScheduler({ initialState, onStateChange, render
   }
 
   if (renderGame) return renderGame({
-    participants, priorityCarry, teamQueue, courts, restOnce, playedCount, disabledCourtsOnce,
+    participants, priorityCarry, teamQueue, courts, restOnce, playedCount, disabledCourtsOnce, excludedPlayers,
     courtCountInput, setCourtCountInput, applyCourtCount, handleMakeTeams, handleFinishCourt,
-    toggleDisableCourtOnce, handleRenameCourt, handleRestOnce, movePlayer,
+    toggleDisableCourtOnce, handleRenameCourt, handleRestOnce, movePlayer, handleExcludePlayer, handleRestorePlayer,
   });
 
   // -----------------------------
