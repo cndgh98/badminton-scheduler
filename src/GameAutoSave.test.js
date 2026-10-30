@@ -37,3 +37,64 @@ test('failed auto save retains the draw and allows a manual retry with the origi
   expect(backend.rpc.mock.calls[1][1].p_version).toBe(3);
   expect(backend.rpc.mock.calls[1][1].p_state).toEqual(backend.rpc.mock.calls[0][1].p_state);
 });
+
+test('moving a player saves the updated placement automatically', async () => {
+  backend.rpc.mockResolvedValue({ data: 4, error: null });
+  const { reload } = setup();
+  fireEvent.click(screen.getByRole('button', { name: /참석0 남성/ }));
+  fireEvent.click(screen.getAllByRole('button', { name: '+ 선수 배치' })[0]);
+  await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+  expect(backend.rpc).toHaveBeenCalledTimes(1);
+  const state = backend.rpc.mock.calls[0][1].p_state;
+  expect(state.courts[0].team).toEqual(['참석0 · 00000000']);
+  expect(state.participants).not.toContain('참석0 · 00000000');
+  expect(state.participants).toHaveLength(11);
+});
+
+test('finishing a court auto saves counts, returned players and next team with the next version', async () => {
+  backend.rpc.mockResolvedValueOnce({ data: 4, error: null }).mockResolvedValueOnce({ data: 5, error: null });
+  const { reload } = setup();
+  fireEvent.click(screen.getByText('🏸 팀 편성하기'));
+  await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+  const draw = backend.rpc.mock.calls[0][1].p_state;
+  const finished = draw.courts[0].team;
+  fireEvent.click(screen.getAllByRole('button', { name: '경기 종료' })[0]);
+  await waitFor(() => expect(reload).toHaveBeenCalledTimes(2));
+  const saved = backend.rpc.mock.calls[1][1];
+  expect(saved.p_version).toBe(4);
+  expect(saved.p_state.courts[0].team).toEqual(draw.teamQueue[0]);
+  expect(saved.p_state.teamQueue).toHaveLength(0);
+  for (const player of finished) {
+    expect(saved.p_state.participants).toContain(player);
+    expect(saved.p_state.playedCount[player]).toBe(1);
+  }
+});
+
+test('operation buttons stay locked while auto save is pending, preventing duplicate game endings', async () => {
+  let completeSave;
+  backend.rpc.mockResolvedValueOnce({ data: 4, error: null }).mockImplementationOnce(() => new Promise(resolve => { completeSave = resolve; }));
+  const { reload } = setup();
+  fireEvent.click(screen.getByText('🏸 팀 편성하기'));
+  await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+  const finishButton = screen.getAllByRole('button', { name: '경기 종료' })[0];
+  fireEvent.click(finishButton);
+  await waitFor(() => expect(backend.rpc).toHaveBeenCalledTimes(2));
+  expect(finishButton).toBeDisabled();
+  expect(screen.getByRole('button', { name: '저장 중…' })).toBeDisabled();
+  fireEvent.click(finishButton);
+  expect(backend.rpc).toHaveBeenCalledTimes(2);
+  completeSave({ data: 5, error: null });
+  await waitFor(() => expect(reload).toHaveBeenCalledTimes(2));
+});
+
+test('a no-op move does not block a subsequent valid auto-saved move', async () => {
+  backend.rpc.mockResolvedValue({ data: 4, error: null });
+  const { reload } = setup();
+  fireEvent.click(screen.getByRole('button', { name: /참석0 남성/ }));
+  fireEvent.click(screen.getByRole('button', { name: '대기로 이동' }));
+  expect(backend.rpc).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: /참석0 남성/ }));
+  fireEvent.click(screen.getAllByRole('button', { name: '+ 선수 배치' })[0]);
+  await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+  expect(backend.rpc.mock.calls[0][1].p_state.courts[0].team).toEqual(['참석0 · 00000000']);
+});
