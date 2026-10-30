@@ -4,16 +4,21 @@ import GameBoard from './GameBoard';
 import { prepareGameState, gameStateFingerprint } from './gameState';
 import { MemberGameRequests, AdminGameRequests } from './GameRequests';
 import MatchOverview from './MatchOverview';
-import { backend, koreaDate, loginEmail, unwrap } from './backend';
+import { AccountManagement, AttendanceStatistics } from './AccountsAndStats';
+import { backend, koreaDate, loginEmail, unwrap, registerAccount } from './backend';
 import './OnlineApp.css';
 
-function Auth({ run, busy }) {
+export function Auth({ run, busy }) {
   const [signup, setSignup] = useState(false);
+  const [message, setMessage] = useState('');
   return <section className="auth-card"><h2>{signup ? '회원가입' : '로그인'}</h2><p>함께 운동할 다음 모임을 확인하세요.</p>
+    {message && <p className="auth-message" role="status">{message}</p>}
     <form onSubmit={e => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.currentTarget)); run(async () => {
       if (signup) {
-        const data = unwrap(await backend.auth.signUp({ email: loginEmail(f.username), password: f.password, options: { data: { username: f.username.trim().toLowerCase(), name: f.name.trim(), gender: f.gender } } }));
-        if (!data.session) throw new Error('가입 후 로그인이 되지 않았습니다. 운영자에게 가입 설정 확인을 요청하세요.');
+        const policy = await backend.rpc('account_signup_policy');
+        if (policy.error || policy.data !== true) throw new Error('가입 승인 기능을 설정 중입니다. 운영자에게 문의해 주세요.');
+        unwrap(await registerAccount({ email: loginEmail(f.username), password: f.password, options: { data: { username: f.username.trim().toLowerCase(), name: f.name.trim(), gender: f.gender } } }));
+        setSignup(false); setMessage('가입 신청이 완료됐습니다. 관리자 승인 후 로그인해 주세요.');
       } else unwrap(await backend.auth.signInWithPassword({ email: loginEmail(f.username), password: f.password }));
     }); }}>
       {signup && <><label>이름<input name="name" required maxLength={40} autoComplete="name" /></label><label>성별<select name="gender"><option>남성</option><option>여성</option></select></label></>}
@@ -130,22 +135,30 @@ export default function OnlineApp() {
   const [error, setError] = useState('');
   const [game, setGame] = useState(false);
   const [newMeeting, setNewMeeting] = useState(false);
+  const [page, setPage] = useState('meetings');
   const admin = profile?.role === 'admin';
   const run = async action => { setBusy(true); setError(''); try { await action(); } catch (e) { setError(e.message || '요청을 처리하지 못했습니다. 다시 시도해 주세요.'); } finally { setBusy(false); } };
   useEffect(() => {
     if (!backend) { setReady(true); return; }
     backend.auth.getSession().then(({ data, error: e }) => { if (e) setError(e.message); setSession(data.session); setReady(true); });
-    const { data } = backend.auth.onAuthStateChange((_event, value) => { setSession(value); if (!value) { setProfile(null); setMeetings([]); setAttendance([]); setSelected(null); setGame(false); } });
+    const { data } = backend.auth.onAuthStateChange((_event, value) => { setSession(value); if (!value) { setProfile(null); setMeetings([]); setAttendance([]); setSelected(null); setGame(false); setPage('meetings'); } });
     return () => data.subscription.unsubscribe();
   }, []);
   const load = useCallback(async () => {
     if (!session) return;
-    const [p, m, a] = await Promise.all([
-      backend.from('profiles').select('*').eq('id', session.user.id).single(),
+    const p = await backend.from('profiles').select('*').eq('id', session.user.id).single();
+    if (p.error?.code === 'PGRST116' || p.data?.status === 'pending') {
+      await backend.auth.signOut();
+      setError(p.data?.status === 'pending' ? '관리자 승인 대기 중입니다. 승인 후 로그인해 주세요.' : '삭제됐거나 사용할 수 없는 계정입니다.');
+      return;
+    }
+    const account = unwrap(p);
+    setProfile(account);
+    const [m, a] = await Promise.all([
       backend.from('meetings').select('*').order('starts_at'),
       backend.from('attendance').select('*')
     ]);
-    setProfile(unwrap(p)); setMeetings(unwrap(m)); setAttendance(unwrap(a));
+    setMeetings(unwrap(m)); setAttendance(unwrap(a));
   }, [session]);
   const loadRoster = useCallback(async () => {
     if (!selected) return;
@@ -188,7 +201,11 @@ export default function OnlineApp() {
   const shiftMonth = amount => { const d = new Date(`${month}-01T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() + amount); setMonth(d.toISOString().slice(0, 7)); setDay(null); };
   return <div className="club"><header className="club-header"><div><span className="eyebrow">OUR COURT, OUR CLUB</span><h1>우주민턴<span>함께 치는 즐거움</span></h1></div>{session && <div className="account"><span>{profile?.name || '회원'} · {admin ? '관리자' : '일반 회원'}</span><button className="quiet" disabled={busy} onClick={() => { if (!game || window.confirm('저장하지 않은 경기 변경이 있으면 사라집니다. 로그아웃할까요?')) run(async () => { unwrap(await backend.auth.signOut()); }); }}>로그아웃</button></div>}</header>
     {error && <div className="notice error" role="alert">{error}<button onClick={() => setError('')} aria-label="오류 닫기">×</button></div>}
-    {!backend ? <section className="auth-card"><h2>온라인 서비스 연결 준비 중</h2><p>운영자가 데이터베이스 연결을 마치면 회원가입과 모임 신청을 사용할 수 있습니다.</p></section> : !ready ? <p role="status">불러오는 중…</p> : !session ? <Auth run={run} busy={busy} /> : game && meeting && admin ? <Game key={meeting.id} meeting={meeting} roster={roster} run={run} busy={busy} reload={load} close={() => setGame(false)} requests={meetingRequests} reloadRequests={loadRequests} /> : <>
+    {session && profile && <nav className="club-nav" aria-label="주 메뉴">{[['meetings','모임'],['statistics','통계'],...(admin ? [['accounts','계정관리']] : [])].map(([key,label]) => <button key={key} className={page === key ? 'active' : ''} disabled={busy} aria-pressed={page === key} onClick={() => {
+      if (game && !window.confirm('경기 운영을 나갈까요? 저장하지 않은 변경이 있으면 사라집니다.')) return;
+      setGame(false); setPage(key);
+    }}>{label}</button>)}</nav>}
+    {!backend ? <section className="auth-card"><h2>온라인 서비스 연결 준비 중</h2><p>운영자가 데이터베이스 연결을 마치면 회원가입과 모임 신청을 사용할 수 있습니다.</p></section> : !ready ? <p role="status">불러오는 중…</p> : !session ? <Auth run={run} busy={busy} /> : !profile ? <p role="status">계정 확인 중…</p> : page === 'statistics' ? <AttendanceStatistics userId={session.user.id} /> : page === 'accounts' && admin ? <AccountManagement currentUserId={session.user.id} run={run} busy={busy} /> : game && meeting && admin ? <Game key={meeting.id} meeting={meeting} roster={roster} run={run} busy={busy} reload={load} close={() => setGame(false)} requests={meetingRequests} reloadRequests={loadRequests} /> : <>
     <section className="welcome"><div><span className="eyebrow">LET’S PLAY</span><h2>다음 모임에서 만나요.</h2><p>날짜를 고르고, 함께할 경기를 신청하세요.</p></div>{admin && <button onClick={() => setNewMeeting(!newMeeting)}>+ 모임 등록</button>}</section>
     {admin && newMeeting && <section className="panel"><h2>새 모임</h2><form className="meeting-form" onSubmit={e => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.currentTarget)); run(async () => {
       unwrap(await backend.from('meetings').insert({ title: f.title.trim(), location: f.location.trim(), starts_at: new Date(`${f.starts_at}:00+09:00`).toISOString(), capacity: Number(f.capacity) }));

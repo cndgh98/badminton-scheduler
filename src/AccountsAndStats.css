@@ -1,0 +1,36 @@
+.club-nav { display:flex; gap:8px; padding:18px 0 0; }
+.club .club-nav button { background:transparent; color:#71836f; border:1px solid transparent; }
+.club .club-nav button.active { background:#e2edda; color:#264d35; border-color:#ccdcbf; }
+.account-page,.statistics-page { max-width:1050px; margin:0 auto; padding:30px 0; }
+.page-intro { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:24px; }
+.club .page-intro h2 { font-size:28px; margin:8px 0; }
+.page-intro p { color:#7c8a79; font-size:13px; }
+.account-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+.account-summary>div { padding:20px; border:1px solid #dce4da; background:white; border-radius:14px; }
+.account-summary span { display:block; font-size:12px; color:#7c8a79; }
+.account-summary strong { display:block; font-size:28px; margin-top:8px; }
+.account-filter { display:flex; align-items:center; gap:8px; margin:22px 0; }
+.account-filter input { flex:1; }
+.account-filter button { white-space:nowrap; font-size:12px; }
+.account-list { display:grid; gap:10px; }
+.account-list article { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:20px; background:white; border:1px solid #dce4da; border-radius:14px; }
+.account-identity { min-width:130px; flex:1; }
+.account-identity strong { font-size:16px; }
+.account-identity p { font-size:12px; color:#7c8a79; margin:6px 0 0; }
+.account-tag { display:inline-block; font-size:10px; background:#eaf0e5; color:#62804d; border-radius:6px; padding:4px 7px; margin-left:6px; font-weight:400; }
+.account-tag.pending { background:#fff0cc; color:#96732c; }
+.account-badges,.account-buttons { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
+.club .account-buttons button { padding:10px 12px; font-size:11px; }
+.my-attendance { display:grid; grid-template-columns:repeat(2,1fr); background:#215239; color:white; padding:26px; border-radius:18px; gap:16px; }
+.my-attendance span { font-size:12px; color:#b9cfb6; }
+.my-attendance strong { display:block; font-size:30px; margin-top:10px; }
+.statistics-rule { font-size:12px; color:#7c8a79; padding:10px 0; }
+.ranking-list { list-style:none; display:grid; gap:10px; padding:0; }
+.ranking-list li { display:flex; align-items:center; gap:18px; padding:20px; border:1px solid #dce4da; border-radius:14px; background:white; }
+.ranking-list li>div { flex:1; }
+.ranking-number { width:35px; height:35px; display:grid; place-items:center; font-size:15px; font-weight:700; color:#819076; border-radius:50%; background:#f1f4eb; }
+.ranking-number.top-rank { color:#46662f; background:#dfeaaf; }
+.ranking-list .my-rank { border-color:#8aa35e; background:#f5f9e9; }
+.club .ranking-list small { display:inline; margin-left:4px; font-size:11px; }
+.auth-message { background:#eaf3df; padding:14px; border-radius:10px; color:#456a37; font-size:13px; margin-bottom:15px; }
+@media(max-width:720px) { .account-list article { flex-wrap:wrap; padding:16px; gap:12px; } .account-badges { justify-content:flex-end; } .account-buttons { width:100%; justify-content:flex-end; } .account-summary>div { padding:15px; } .account-filter { flex-wrap:wrap; } .account-filter input { flex-basis:100%; } .club-nav button { flex:1; padding:12px 8px; font-size:13px; } .club .page-intro h2 { font-size:24px; } }

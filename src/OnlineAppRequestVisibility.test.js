@@ -35,3 +35,13 @@ test('missing attendance shows visible request buttons and an explanation instea
  expect(screen.getByRole('button',{name:'한 번 쉬기 요청'})).toBeDisabled();
  expect(screen.getByRole('button',{name:'경기 제외 요청'})).toBeDisabled();
 });
+
+test('all members see statistics but account management is restricted to admins',async()=>{
+ setup('member');await openMeeting();
+ expect(screen.getByRole('button',{name:'통계'})).toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:'계정관리'})).not.toBeInTheDocument();
+});
+test('admin navigation includes account management',async()=>{
+ setup('admin');await openMeeting();
+ expect(screen.getByRole('button',{name:'계정관리'})).toBeInTheDocument();
+});

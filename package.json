@@ -24,7 +24,8 @@
     "deploy": "gh-pages -d build",
     "test": "react-scripts test",
     "test:database": "node scripts/test-database.mjs",
-    "test:requests": "node scripts/test-game-requests.mjs"
+    "test:requests": "node scripts/test-game-requests.mjs",
+    "test:accounts": "node scripts/test-accounts.mjs"
   },
   "eslintConfig": {
     "extends": [

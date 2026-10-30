@@ -12,3 +12,11 @@ export function unwrap(result) {
   if (result.error) throw result.error;
   return result.data;
 }
+
+export async function registerAccount(details) {
+  // A separate, nonpersistent client prevents signup from logging in the main app.
+  const client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'badminton-registration' } });
+  const result = await client.auth.signUp(details);
+  if (result.data?.session) await client.auth.signOut({ scope: 'local' });
+  return result;
+}

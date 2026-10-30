@@ -1,5 +1,5 @@
 -- Run once in a new Supabase project's SQL Editor.
--- Then run migrations/20261030_game_requests.sql to enable member game requests.
+-- Then run migrations/20261030_game_requests.sql and migrations/20261030_accounts_and_statistics.sql in that order.
 begin;
 create table public.profiles (
  id uuid primary key references auth.users(id) on delete cascade,
