@@ -1,0 +1,58 @@
+.club { min-height:100vh; background:#f4f6f2; color:#19382c; font-family:Arial,'Apple SD Gothic Neo',sans-serif; padding:0 5vw; }
+.club * { box-sizing:border-box; }
+.club-header { display:flex; justify-content:space-between; align-items:center; padding:28px 0; border-bottom:1px solid #dce4da; gap:16px; }
+.eyebrow { font-size:11px; font-weight:800; letter-spacing:2px; color:#688374; }
+.club h1 { font-size:28px; font-weight:800; margin:5px 0; }
+.club h1 span { font-size:12px; margin-left:15px; font-weight:400; }
+.club h2 { font-size:22px; font-weight:750; margin:10px 0 16px; }
+.club h3 { font-weight:700; margin:24px 0 10px; }
+.club p { margin:10px 0; line-height:1.6; }
+.club button { padding:12px 18px; border-radius:10px; background:#215c40; color:white; font-weight:700; border:1px solid transparent; cursor:pointer; min-height:44px; }
+.club button:hover { filter:brightness(.94); }
+.club button:disabled { opacity:.45; cursor:default; }
+.club button:focus-visible,.club input:focus-visible,.club select:focus-visible { outline:3px solid #a9be24; outline-offset:3px; }
+.club .quiet { color:#315d46; background:transparent; border-color:#d9e3d9; }
+.club .account { display:flex; gap:14px; align-items:center; font-size:13px; }
+.auth-card { max-width:420px; margin:55px auto; padding:30px; background:white; border:1px solid #dce4da; border-radius:20px; }
+.club form { display:grid; gap:16px; }
+.club label { display:grid; gap:7px; font-size:13px; font-weight:600; }
+.club input,.club select { width:100%; min-width:0; padding:12px; border:1px solid #cddace; border-radius:8px; background:white; color:#19382c; font-size:16px; }
+.auth-card .quiet { width:100%; margin:16px 0; }
+.club small { display:block; color:#667d6f; font-size:12px; line-height:1.7; margin-top:10px; }
+.welcome { display:flex; align-items:center; justify-content:space-between; padding:35px 0; gap:20px; }
+.welcome h2 { font-size:30px; margin:8px 0; }
+.welcome p,.muted { color:#718075; }
+.club-grid { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); gap:24px; align-items:start; max-width:1200px; margin:auto; }
+.panel { background:white; border:1px solid #dce4da; border-radius:18px; padding:25px; margin-bottom:20px; min-width:0; }
+.month-nav { display:flex; align-items:center; justify-content:space-between; }
+.month-nav h2 { margin:0; }
+.calendar { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); margin:22px 0 8px; gap:3px; }
+.weekday { text-align:center; font-size:12px; color:#809083; padding-bottom:12px; }
+.club .calendar button { background:transparent; color:#254a35; padding:8px 0 1px; font-size:14px; border-radius:9px; }
+.calendar button span { display:block; font-size:8px; color:#7c9c31; min-height:15px; }
+.club .calendar .selected { background:#215c40; color:white; }
+.club .calendar .today { border-color:#9db085; }
+.meeting-list { display:grid; gap:10px; margin-top:20px; }
+.club .meeting-item { display:grid; gap:7px; background:#f7f9f5; text-align:left; color:#254a35; border:1px solid #e4eadd; }
+.club .meeting-item.active { border-color:#477e55; background:#edf4e6; }
+.meeting-item span { font-size:12px; font-weight:400; }
+.meeting-item strong { font-size:17px; }
+.capacity { display:flex; justify-content:space-between; gap:10px; background:#edf3e7; border-radius:10px; padding:18px; margin:24px 0 15px; }
+.wide { width:100%; }
+.people { display:flex; flex-wrap:wrap; gap:8px; }
+.people span { background:#f0f4ec; border-radius:7px; padding:8px 12px; font-size:13px; }
+.details ol { list-style:decimal; padding-left:24px; color:#5a6e60; }
+.details li { padding:5px; }
+.empty { text-align:center; padding:60px 10px; color:#748577; }
+.empty>span { font-size:42px; }
+.admin-actions { border-top:1px solid #e4eadd; margin-top:24px; padding-top:24px; display:grid; gap:7px; }
+.club .danger { color:#a53a31; }
+.notice { padding:16px; border-radius:10px; background:#fff2d6; margin:16px 0; }
+.error { background:#ffe9e3; color:#962f28; display:flex; align-items:center; justify-content:space-between; position:sticky; top:8px; z-index:10; }
+.club .error button { background:transparent; color:inherit; }
+.meeting-form { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.game-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:18px 0; position:sticky; top:0; background:#f4f6f2; z-index:5; }
+.game-note { font-size:13px; color:#667d6f; }
+.court-summary { background:#f4f6f2; padding:14px; margin-bottom:8px; border-radius:9px; }
+.club footer { padding:35px 0; text-align:center; color:#819083; font-size:12px; }
+@media(max-width:720px) { .club { padding:0 16px; } .club-grid { grid-template-columns:1fr; gap:0; } .club-header { align-items:flex-start; } .club h1 span { display:block; margin:6px 0 0; } .club .account { flex-direction:column; gap:5px; align-items:flex-end; } .welcome { padding:26px 0; } .welcome h2 { font-size:23px; } .welcome p { font-size:13px; } .welcome>button { flex-shrink:0; padding:12px; } .panel { padding:18px; } .meeting-form { grid-template-columns:1fr; } .game-toolbar { flex-wrap:wrap; } }

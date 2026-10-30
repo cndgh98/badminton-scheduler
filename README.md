@@ -1,70 +1,59 @@
-# Getting Started with Create React App
+# 우주민턴 온라인
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+React + Supabase 기반 동호회 모임 예약과 경기 운영 앱. 기존 GitHub Pages 배포를 유지합니다.
 
-## Available Scripts
+## 기능
 
-In the project directory, you can run:
+- 이름 / 성별 / 아이디 / 비밀번호 가입, 관리자·일반 회원 권한
+- 월별 달력, 관리자 모임 등록·취소
+- 정원 내 참석 신청, 초과 시 선착순 대기, 취소 시 자동 승격
+- 한국 시간 기준 당일 관리자 경기 운영, 모임별 경기 저장
+- 일반 회원의 현재 코트 조회, 15초 주기 갱신
+- 경기 저장 시 버전 검사: 다른 관리자의 변경을 조용히 덮어쓰지 않음
 
-### `npm start`
+## 최초 연결
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+1. Supabase 프로젝트를 생성합니다.
+2. SQL Editor에서 `supabase/schema.sql` 전체를 한 번 실행합니다. 신규 프로젝트용 스키마입니다.
+3. Auth 설정에서 Email provider를 사용하고 **Confirm email을 끕니다**. 아이디를 `아이디@members.invalid`라는 내부 인증 식별자로 변환하므로 실제 이메일을 수집하거나 발송하지 않습니다. 로그인 아이디는 영문·숫자·밑줄 4~24자이며 대소문자를 구별하지 않습니다. 비밀번호 최소 길이를 8자로 설정하세요. 운영 시 가입 남용 방지를 위한 Auth rate limit을 확인하세요.
+4. `.env.example`을 `.env.local`로 복사하고 프로젝트 URL, **publishable 공개 키**를 입력합니다 (`REACT_APP_SUPABASE_PUBLISHABLE_KEY`). 기존 `REACT_APP_SUPABASE_ANON_KEY` 이름도 호환됩니다. `service_role` / secret 키는 절대 브라우저에 넣지 마세요.
+5. `npm ci`, `npm start`로 실행합니다.
+6. 최초 관리자 계정을 일반 회원으로 가입한 후 SQL Editor에서 다음을 실행합니다.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+```sql
+update public.profiles set role = 'admin' where username = '관리자아이디';
+```
 
-### `npm test`
+추가 관리자도 프로젝트 소유자가 같은 SQL로 지정합니다. 앱 회원이 자기 역할을 변경할 권한은 없습니다. 이름·성별·아이디는 본인과 관리자만 조회할 수 있고, 모임 명단 API에는 참석자의 이름만 노출합니다.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## 배포
 
-### `npm run build`
+`.env.local` 설정 후 `npm run build`, `npm run deploy`로 기존 GitHub Pages에 배포합니다. 환경변수는 빌드 시 포함되므로 변경 후 다시 빌드하세요. CI에서 배포하면 같은 이름의 환경변수를 CI에도 설정해야 합니다. 데이터베이스 설정 전 배포하면 서비스 연결 준비 화면이 표시됩니다.
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+`npm test -- --watchAll=false`로 UI 기본 화면·한국 날짜 경계·로그인 아이디 정규화를 검사합니다.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+`npm run test:database`는 PGlite의 실제 PostgreSQL 엔진과 Auth 테스트 스텁으로 SQL 스키마·권한·정원·대기 승격·재신청 순서·모임 취소·경기 날짜 및 저장 충돌을 검사합니다. 실제 Supabase Auth 및 동시 요청 부하 검증은 연결 후 별도로 수행하세요.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## 운영 규칙
 
-### `npm run eject`
+- 모임 시작 시각 이후 신규 신청은 마감됩니다. 기존 신청 취소와 대기 승격은 가능합니다.
+- 신청/취소/모임 취소/경기 저장은 같은 모임 행을 잠가 순서대로 처리합니다. 클라이언트의 정원 표시와 관계없이 서버가 최종 판단합니다.
+- 취소 후 재신청하면 대기 순서는 맨 뒤입니다.
+- 경기 운영은 한국 시간 기준 해당 날짜에만 서버에서 허용합니다.
+- 최초 경기 운영 시 확정 참석자를 불러옵니다. 동명이인은 이름 옆 회원 식별자로 구별합니다. 이후 예약 변동은 경기 진행을 방해하지 않도록 자동으로 팀에 반영하지 않습니다. 운영자가 대기 인원 등을 직접 조정하세요.
+- 경기 화면은 **명시적으로 ‘경기 저장’을 눌러야** 서버에 저장됩니다. 저장 충돌 시 화면의 변경을 확인한 뒤 모임으로 돌아가 다시 여세요. 다른 관리자의 저장과 충돌하면 자신의 변경이 저장되지 않습니다.
+- 기존 브라우저의 `badminton_state_v1` 기록은 가져오지 않습니다. 새 온라인 모임마다 별도 경기 기록을 만듭니다.
+- 비밀번호 분실 시 프로젝트 소유자가 Supabase 관리 환경 또는 서버 전용 Admin API로 본인 확인 후 재설정해야 합니다. 앱 내 관리자 비밀번호 초기화·관리자 지정 UI는 포함하지 않았습니다. 실제 이메일이 없으므로 이메일 복구는 사용할 수 없습니다.
+- 현재 범위에는 현장 도착 체크, 모임 수정, 푸시 알림, 오프라인 운영은 포함하지 않습니다.
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+## 권한 검증
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+실서비스 연결 후 일반 회원과 관리자 계정을 각각 만들어 다음을 확인하세요.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+1. 일반 회원은 모임 생성·취소·경기 저장 API를 직접 요청해도 거절됩니다.
+2. 정원 1명 모임에 두 회원이 동시에 신청하면 참석 1명·대기 1명이 됩니다.
+3. 참석자 취소 시 첫 대기자가 승격됩니다. 대기 취소 후 재신청은 뒤로 이동합니다.
+4. 두 관리자 창에서 같은 경기 버전을 저장하면 두 번째 저장은 거절됩니다.
+5. 어제/내일 모임의 경기 저장은 서버에서도 거절됩니다.
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+스키마와 RLS 정책을 실제 Supabase에 적용하고 위 검증을 마친 뒤 회원에게 배포하세요.

@@ -1,6 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-export default function BadmintonScheduler() {
+  function teamSignature(team) { return [...team].sort((a, b) => a.localeCompare(b)).join("|"); }
+
+  function isExactRepeatTeamWithMap(team, map) {
+    if (team.length !== 4) return false;
+    const sig = teamSignature(team);
+    return team.every((name) => map[name] === sig);
+  }
+
+export default function BadmintonScheduler({ initialState, onStateChange }) {
   // -----------------------------
   // State
   // -----------------------------
@@ -67,12 +75,6 @@ export default function BadmintonScheduler() {
     }
     return [picked, pool];
   }
-  function teamSignature(team) { return [...team].sort((a, b) => a.localeCompare(b)).join("|"); }
-  function isExactRepeatTeamWithMap(team, map) {
-    if (team.length !== 4) return false;
-    const sig = teamSignature(team);
-    return team.every((name) => map[name] === sig);
-  }
   function isExactRepeatTeam(team) { return isExactRepeatTeamWithMap(team, lastTeamSigByPlayer); }
   function markTeamAsStarted(team) {
     const sig = teamSignature(team);
@@ -108,10 +110,10 @@ export default function BadmintonScheduler() {
   }
 
   // -----------------------------
-  // Persistence (localStorage)
+  // Meeting state hydration and explicit online save callback
   // -----------------------------
   useEffect(() => {
-    const raw = localStorage.getItem("badminton_state_v1");
+    const raw = initialState ? JSON.stringify(initialState) : null;
     if (!raw) return;
     try {
       const s = JSON.parse(raw);
@@ -133,11 +135,11 @@ export default function BadmintonScheduler() {
       if (Array.isArray(s.priorityCarry)) setPriorityCarry(s.priorityCarry);
       if (Array.isArray(s.restOnce)) setRestOnce(s.restOnce);
       if (s.playedCount && typeof s.playedCount === "object") setPlayedCount(s.playedCount);
-      // disabledCourtsOnce는 세션 상태(비영속)
+      if (Array.isArray(s.disabledCourtsOnce)) setDisabledCourtsOnce(s.disabledCourtsOnce);
     } catch {
       // ignore
     }
-  }, []);
+  }, [initialState]);
 
   useEffect(() => {
     const payload = {
@@ -150,9 +152,10 @@ export default function BadmintonScheduler() {
       priorityCarry,
       restOnce,
       playedCount,
+      disabledCourtsOnce,
     };
-    localStorage.setItem("badminton_state_v1", JSON.stringify(payload));
-  }, [participants, teamQueue, courts, courtCountInput, namesInput, lastTeamSigByPlayer, priorityCarry, restOnce, playedCount]);
+    onStateChange?.(payload);
+  }, [participants, teamQueue, courts, courtCountInput, namesInput, lastTeamSigByPlayer, priorityCarry, restOnce, playedCount, disabledCourtsOnce, onStateChange]);
 
   // -----------------------------
   // DnD payload helpers
@@ -437,7 +440,6 @@ export default function BadmintonScheduler() {
     setRestOnce([]);
     setPlayedCount({});
     setDisabledCourtsOnce([]);
-    localStorage.removeItem("badminton_state_v1");
   }
 
   // ---------- DnD: 공통 조작 ----------
