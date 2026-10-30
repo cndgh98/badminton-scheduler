@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Scheduler from './App';
+import GameBoard from './GameBoard';
+import { prepareGameState, playerInfo } from './gameState';
 import { backend, koreaDate, loginEmail, unwrap } from './backend';
 import './OnlineApp.css';
 
@@ -24,8 +26,8 @@ export function Game({ meeting, roster, run, busy, reload, close }) {
   const draft = useRef(null);
   const version = useRef(meeting.game_version);
   const [dirty, setDirty] = useState(false);
-  const initial = useRef(meeting.game_state || { participants: roster.filter(r => r.status === 'confirmed').map(r => `${r.name} · ${r.user_id.slice(0, 8)}`) });
-  const changed = useCallback(value => { draft.current = value; setDirty(true); }, []);
+  const initial = useRef(prepareGameState(meeting.game_state, roster));
+  const changed = useCallback(value => { draft.current = { ...value, playerProfiles: initial.current.playerProfiles }; setDirty(true); }, []);
   useEffect(() => {
     const protect = e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } };
     window.addEventListener('beforeunload', protect);
@@ -35,7 +37,7 @@ export function Game({ meeting, roster, run, busy, reload, close }) {
     const snapshot = draft.current;
     version.current = unwrap(await backend.rpc('save_game', { p_meeting: meeting.id, p_state: snapshot, p_version: version.current }));
     setDirty(draft.current !== snapshot); await reload();
-  })}>경기 저장</button></div><p className="game-note">변경 후 ‘경기 저장’을 눌러주세요. 참석자는 최초 실행 시 불러옵니다. 이후 참석 변경은 운영 화면에 직접 반영하세요. 동명이인은 이름 옆 식별자로 구분합니다.</p><Scheduler initialState={initial.current} onStateChange={changed} /></>;
+  })}>경기 저장</button></div><p className="game-note">해당 모임의 참석 확정자를 대기 인원으로 불러왔습니다. 변경 후 ‘경기 저장’을 눌러주세요.</p><Scheduler initialState={initial.current} onStateChange={changed} renderGame={state => <GameBoard state={state} profiles={initial.current.playerProfiles} meeting={meeting} busy={busy} />} /></>;
 }
 
 export default function OnlineApp() {
@@ -69,7 +71,16 @@ export default function OnlineApp() {
     ]);
     setProfile(unwrap(p)); setMeetings(unwrap(m)); setAttendance(unwrap(a));
   }, [session]);
-  const loadRoster = useCallback(async () => { if (selected) setRoster(unwrap(await backend.rpc('roster', { p_meeting: selected }))); }, [selected]);
+  const loadRoster = useCallback(async () => {
+    if (!selected) return;
+    let people = unwrap(await backend.rpc('roster', { p_meeting: selected }));
+    if (profile?.role === 'admin' && people.length) {
+      const profiles = unwrap(await backend.from('profiles').select('id,gender').in('id', people.map(p => p.user_id)));
+      const genders = Object.fromEntries(profiles.map(p => [p.id, p.gender]));
+      people = people.map(p => ({ ...p, gender: genders[p.user_id] }));
+    }
+    setRoster(people);
+  }, [selected, profile?.role]);
   useEffect(() => { if (!session) return; let live = true; const refresh = () => { load().catch(e => { if (live) setError(e.message); }); }; refresh(); const timer = setInterval(refresh, 15000); return () => { live = false; clearInterval(timer); }; }, [load, session]);
   useEffect(() => { setRoster([]); if (!session || !selected) return; const refresh = () => loadRoster().catch(e => setError(e.message)); refresh(); const timer = setInterval(refresh, 15000); return () => clearInterval(timer); }, [selected, session, loadRoster]);
   const meeting = meetings.find(m => m.id === selected);
@@ -93,7 +104,7 @@ export default function OnlineApp() {
     {meeting.cancelled ? <p className="notice">취소된 모임입니다.</p> : <><button className="wide" disabled={busy || (!mine && new Date(meeting.starts_at) <= new Date())} onClick={() => run(async () => { unwrap(await backend.rpc('reserve', { p_meeting: meeting.id, p_cancel: Boolean(mine) })); await Promise.all([load(), loadRoster()]); })}>{mine ? mine.status === 'confirmed' ? '참석 취소' : `대기 ${waiting.findIndex(r => r.user_id === session.user.id) + 1 || '…'}번 · 대기 취소` : new Date(meeting.starts_at) <= new Date() ? '신청 마감' : confirmed >= meeting.capacity ? '대기 신청' : '참석하기'}</button><small>빈자리가 생기면 대기 신청 순서대로 자동 참석 처리됩니다. 정보는 15초마다 갱신됩니다.</small></>}
     <h3>참석자</h3><div className="people">{roster.filter(r => r.status === 'confirmed').map(r => <span key={r.user_id}>{r.name}{r.user_id === session.user.id ? ' (나)' : ''}</span>)}{!confirmed && <p className="muted">첫 번째 참석자가 되어 주세요.</p>}</div><h3>대기 순서</h3><ol>{waiting.map(r => <li key={r.user_id}>{r.name}{r.user_id === session.user.id ? ' (나)' : ''}</li>)}</ol>
     {admin && !meeting.cancelled && <div className="admin-actions"><button disabled={busy || koreaDate(meeting.starts_at) !== koreaDate()} onClick={() => run(async () => { await Promise.all([load(), loadRoster()]); setGame(true); })}>경기 운영 시작</button><small>경기 운영은 한국 시간 기준 모임 당일에 열립니다.</small><button className="quiet danger" disabled={busy} onClick={() => { if (window.confirm('이 모임을 취소할까요?')) run(async () => { unwrap(await backend.rpc('cancel_meeting', { p_meeting: meeting.id })); await load(); }); }}>모임 취소</button></div>}
-    {meeting.game_state && <><h3>현재 코트</h3>{(meeting.game_state.courts || []).map(c => <div className="court-summary" key={c.id}><strong>{c.name}</strong><p>{c.team?.join(' / ') || '대기 중'}</p></div>)}</>}
+    {meeting.game_state && <><h3>현재 코트</h3>{(meeting.game_state.courts || []).map(c => <div className="court-summary" key={c.id}><strong>{c.name}</strong><p>{c.team?.map(key => { const p = playerInfo(key, meeting.game_state.playerProfiles); return `${p.name}${p.gender ? ` (${p.gender})` : ''}`; }).join(' / ') || '대기 중'}</p></div>)}</>}
     <button className="quiet" disabled={busy} onClick={() => run(async () => { await Promise.all([load(), loadRoster()]); })}>최신 정보 새로고침</button></>}</section></div></>}
     <footer>우주민턴 · 함께 운동하는 우리들의 공간</footer></div>;
 }

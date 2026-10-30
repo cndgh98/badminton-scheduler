@@ -8,7 +8,7 @@ import React, { useEffect, useMemo, useState } from "react";
     return team.every((name) => map[name] === sig);
   }
 
-export default function BadmintonScheduler({ initialState, onStateChange }) {
+export default function BadmintonScheduler({ initialState, onStateChange, renderGame }) {
   // -----------------------------
   // State
   // -----------------------------
@@ -386,7 +386,7 @@ export default function BadmintonScheduler({ initialState, onStateChange }) {
     const finalQueue = [...existingQueue, ...queueAfterAssign];
 
     // 쉼(1회용) 처리
-    const nextParticipants = mergeRestOnceBack(participants, restOnce);
+    const nextParticipants = mergeRestOnceBack([...participants, ...priorityCarry], restOnce);
 
     setCourts(nextCourts);
     setTeamQueue(finalQueue);
@@ -695,46 +695,43 @@ export default function BadmintonScheduler({ initialState, onStateChange }) {
     };
   }, [participants, courts, teamQueue]);
 
-  // -----------------------------
-  // Dev tests (console-only)
-  // -----------------------------
-  useEffect(() => {
-    try {
-      const r1 = parseNames("A\nB\n\nC");
-      console.assert(r1.length === 3 && r1[0] === "A" && r1[2] === "C", "parseNames \\n 실패");
-      const r2 = parseNames("A\r\nB\r\nC");
-      console.assert(r2.length === 3 && r2[1] === "B", "parseNames \\r\\n 실패");
-      const r3 = parseNames("  A  \n   B\n\n  ");
-      console.assert(r3.length === 2 && r3[0] === "A" && r3[1] === "B", "parseNames trim 실패");
-      console.assert(teamSignature(["b", "a", "c"]) === teamSignature(["c", "b", "a"]), "teamSignature 일관성 실패");
-      const arr = [1, 2, 3, 4, 5, 6];
-      console.assert(shuffle(arr).length === arr.length, "shuffle 길이 보존 실패");
-      const lastMap = {};
-      const prev = ["A", "B", "C", "D"];
-      const sigPrev = teamSignature(prev);
-      prev.forEach((n) => (lastMap[n] = sigPrev));
-      console.assert(isExactRepeatTeamWithMap(["A", "B", "C", "D"], lastMap) === true, "동일팀 감지 실패");
-      const restSet = new Set(["A"]);
-      const eligiblePC = ["A", "B"].filter((p) => !restSet.has(p));
-      const eligiblePP = ["A", "B", "C"].filter((p) => !restSet.has(p));
-      console.assert(eligiblePC.length === 1 && eligiblePC[0] === "B", "restOnce 우선순위 필터 실패");
-      console.assert(eligiblePP.length === 2 && eligiblePP.includes("B") && eligiblePP.includes("C"), "restOnce 참여자 필터 실패");
-      const merged = (function () {
-        const before = ["A", "B", "C", "D", "E"];
-        const ro = ["A"];
-        return mergeRestOnceBack(before, ro);
-      })();
-      console.assert(merged.length === 1 && merged[0] === "A", "mergeRestOnceBack 실패");
-      console.assert(canDrop({from:"queue",teamIndex:0},{type:"queue",teamIndex:0}) === false, "same queue must be blocked");
-      console.assert(canDrop({from:"queue",teamIndex:0},{type:"queue",teamIndex:1}) === true, "different queue allowed");
-      console.assert(canDrop({from:"court",courtId:2},{type:"court",courtId:2}) === false, "same court must be blocked");
-      console.assert(canDrop({from:"court",courtId:2},{type:"court",courtId:3}) === true, "different court allowed");
-      console.assert(canDrop({from:"participants"},{type:"participants"}) === false, "participants to participants blocked");
-      console.log("[DevTests] OK");
-    } catch (e) {
-      console.error("[DevTests] 실패", e);
+  // Both layouts share the same placement actions. Touch controls do not require dragging.
+  function movePlayer(source, target) {
+    if (source.from === "court" && target.type === "court" && source.courtId === target.courtId && typeof target.memberIndex === "number") {
+      setCourts(prev => prev.map(c => {
+        if (c.id !== source.courtId || !c.team) return c;
+        const team = [...c.team];
+        [team[source.memberIndex], team[target.memberIndex]] = [team[target.memberIndex], team[source.memberIndex]];
+        return { ...c, team };
+      }));
+      return;
     }
-  }, []);
+    if (source.from === "queue" && target.type === "queue" && source.teamIndex === target.teamIndex && typeof target.memberIndex === "number") {
+      setTeamQueue(prev => prev.map((team, i) => {
+        if (i !== source.teamIndex) return team;
+        const next = [...team];
+        [next[source.memberIndex], next[target.memberIndex]] = [next[target.memberIndex], next[source.memberIndex]];
+        return next;
+      }));
+      return;
+    }
+    const event = { preventDefault() {}, stopPropagation() {}, target: {}, dataTransfer: { getData: () => JSON.stringify(source) } };
+    if (target.type === "participants") handleDropToParticipants(event);
+    else if (target.type === "priority") handleDropToPriorityContainer(event);
+    else if (target.type === "court") {
+      if (typeof target.memberIndex === "number") handleDropToCourtChip(event, target.courtId, target.memberIndex);
+      else handleDropToCourtContainer(event, target.courtId);
+    } else if (target.type === "queue") {
+      if (typeof target.memberIndex === "number") handleDropToQueueChip(event, target.teamIndex, target.memberIndex);
+      else handleDropToQueueContainer(event, target.teamIndex);
+    }
+  }
+
+  if (renderGame) return renderGame({
+    participants, priorityCarry, teamQueue, courts, restOnce, playedCount, disabledCourtsOnce,
+    courtCountInput, setCourtCountInput, applyCourtCount, handleMakeTeams, handleFinishCourt,
+    toggleDisableCourtOnce, handleRenameCourt, handleRestOnce, movePlayer,
+  });
 
   // -----------------------------
   // UI
