@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/badminton-scheduler/static/css/main.9541787c.css",
-    "main.js": "/badminton-scheduler/static/js/main.0ce405d6.js",
+    "main.css": "/badminton-scheduler/static/css/main.fddffb46.css",
+    "main.js": "/badminton-scheduler/static/js/main.767e6dca.js",
     "static/js/453.6f698a1b.chunk.js": "/badminton-scheduler/static/js/453.6f698a1b.chunk.js",
     "index.html": "/badminton-scheduler/index.html",
-    "main.9541787c.css.map": "/badminton-scheduler/static/css/main.9541787c.css.map",
-    "main.0ce405d6.js.map": "/badminton-scheduler/static/js/main.0ce405d6.js.map",
+    "main.fddffb46.css.map": "/badminton-scheduler/static/css/main.fddffb46.css.map",
+    "main.767e6dca.js.map": "/badminton-scheduler/static/js/main.767e6dca.js.map",
     "453.6f698a1b.chunk.js.map": "/badminton-scheduler/static/js/453.6f698a1b.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.9541787c.css",
-    "static/js/main.0ce405d6.js"
+    "static/css/main.fddffb46.css",
+    "static/js/main.767e6dca.js"
   ]
 }
