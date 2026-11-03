@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { backend, koreaDate, unwrap } from './backend';
 import './AccountsAndStats.css';
 
@@ -35,24 +35,42 @@ export function AccountManagement({ currentUserId, run, busy }) {
 }
 
 export function AttendanceStatistics({ userId }) {
-  const [rows, setRows] = useState([]);
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState('');
-  const month = koreaDate().slice(0, 7);
+  const currentMonth = koreaDate().slice(0, 7);
+  const [month, setMonth] = useState(currentMonth);
+  const [result, setResult] = useState({ month: null, rows: [], error: '' });
+  const requestId = useRef(0);
   const load = useCallback(async () => {
-    setLoaded(false); setError('');
-    const result = await backend.rpc('monthly_attendance_ranking', { p_month: `${month}-01` });
-    if (result.error) { setError(result.error.code === 'PGRST202' ? '통계 데이터베이스 설정이 필요합니다.' : result.error.message); return; }
-    setRows(unwrap(result)); setLoaded(true);
+    const id = ++requestId.current;
+    setResult({ month: null, rows: [], error: '' });
+    try {
+      const response = await backend.rpc('monthly_attendance_ranking', { p_month: `${month}-01` });
+      if (response.error) throw response.error;
+      if (id === requestId.current) setResult({ month, rows: unwrap(response), error: '' });
+    } catch (error) {
+      if (id === requestId.current) setResult({ month, rows: [], error: error.code === 'PGRST202' ? '통계 데이터베이스 설정이 필요합니다.' : error.message || '참석 기록을 불러오지 못했습니다.' });
+    }
   }, [month]);
-  useEffect(() => { load().catch(e => setError(e.message)); }, [load]);
+  useEffect(() => { load(); return () => { requestId.current += 1; }; }, [load]);
+  const loaded = result.month === month && !result.error;
+  const rows = loaded ? result.rows : [];
+  const error = result.month === month ? result.error : '';
   const mine = rows.find(row => row.user_id === userId);
-  return <section className="statistics-page"><div className="page-intro"><div><span className="eyebrow">MONTHLY LEADERBOARD</span><h2>{Number(month.slice(5))}월 참석 랭킹</h2><p>이번 달, 함께 코트에 가장 많이 선 회원은?</p></div><button className="quiet" onClick={() => load().catch(e => setError(e.message))}>새로고침</button></div>
-    <div className="my-attendance"><div><span>나의 이번 달 참석</span><strong>{loaded ? `${mine?.attendance_count || 0}회` : '—'}</strong></div><div><span>내 순위</span><strong>{loaded && mine ? `${mine.rank}위` : '—'}</strong></div></div>
-    <p className="statistics-rule">한국 시간 기준 {month.replace('-', '년 ')}월 · 시작한 모임의 참석 확정 기록으로 집계합니다. 취소 모임과 예정 모임은 제외하며, 같은 횟수는 공동 순위입니다.</p>
+  const monthLabel = `${Number(month.slice(0, 4))}년 ${Number(month.slice(5))}월`;
+  function selectMonth(value) {
+    if (/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(value) && value >= '0001-01' && value <= currentMonth) setMonth(value);
+  }
+  function shiftMonth(amount) {
+    const date = new Date(`${month}-01T00:00:00Z`);
+    date.setUTCMonth(date.getUTCMonth() + amount);
+    selectMonth(date.toISOString().slice(0, 7));
+  }
+  return <section className="statistics-page"><div className="page-intro"><div><span className="eyebrow">MONTHLY LEADERBOARD</span><h2>{monthLabel} 참석 랭킹</h2><p>함께 코트에 선 기록을 월별로 확인하세요.</p></div><button className="quiet" onClick={load}>새로고침</button></div>
+    <div className="statistics-month-selector" role="group" aria-label="통계 조회 월 선택"><button className="quiet" aria-label="이전 달 통계" disabled={month <= '0001-01'} onClick={() => shiftMonth(-1)}>←</button><label htmlFor="statistics-month">조회 월</label><input id="statistics-month" type="month" min="0001-01" max={currentMonth} value={month} onChange={e => selectMonth(e.target.value)} /><button className="quiet" aria-label="다음 달 통계" disabled={month >= currentMonth} onClick={() => shiftMonth(1)}>→</button><button className="quiet" disabled={month === currentMonth} onClick={() => setMonth(currentMonth)}>이번 달</button></div>
+    <div className="my-attendance"><div><span>나의 {Number(month.slice(5))}월 참석</span><strong>{loaded ? `${mine?.attendance_count || 0}회` : '—'}</strong></div><div><span>내 순위</span><strong>{loaded && mine ? `${mine.rank}위` : '—'}</strong></div></div>
+    <p className="statistics-rule">한국 시간 기준 {monthLabel} · 시작한 모임의 참석 확정 기록으로 집계합니다. 취소 모임과 예정 모임은 제외하며, 같은 횟수는 공동 순위입니다.</p>
     {error && <p className="notice" role="alert">{error}</p>}
     {!error && !loaded && <p role="status">참석 기록을 불러오는 중…</p>}
     <ol className="ranking-list">{rows.map(row => <li className={row.user_id === userId ? 'my-rank' : ''} key={row.user_id}><span className={`ranking-number ${row.rank <= 3 ? 'top-rank' : ''}`}>{row.rank}</span><div><strong>{row.name}</strong>{row.user_id === userId && <span className="account-tag">나</span>}</div><strong>{row.attendance_count}<small>회</small></strong></li>)}</ol>
-    {loaded && !rows.length && <p className="empty">이번 달 참석 기록이 아직 없습니다.</p>}
+    {loaded && !rows.length && <p className="empty">{monthLabel} 참석 기록이 없습니다.</p>}
   </section>;
 }

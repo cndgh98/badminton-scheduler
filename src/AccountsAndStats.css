@@ -34,3 +34,8 @@
 .club .ranking-list small { display:inline; margin-left:4px; font-size:11px; }
 .auth-message { background:#eaf3df; padding:14px; border-radius:10px; color:#456a37; font-size:13px; margin-bottom:15px; }
 @media(max-width:720px) { .account-list article { flex-wrap:wrap; padding:16px; gap:12px; } .account-badges { justify-content:flex-end; } .account-buttons { width:100%; justify-content:flex-end; } .account-summary>div { padding:15px; } .account-filter { flex-wrap:wrap; } .account-filter input { flex-basis:100%; } .club-nav button { flex:1; padding:12px 8px; font-size:13px; } .club .page-intro h2 { font-size:24px; } }
+.statistics-month-selector { display:flex; align-items:center; gap:10px; margin-bottom:20px; flex-wrap:wrap; }
+.statistics-month-selector label { font-size:12px; color:#6a7e62; }
+.statistics-month-selector input { width:180px; min-height:44px; }
+.club .statistics-month-selector button { font-size:12px; padding:11px 14px; }
+@media(max-width:420px) { .statistics-month-selector { gap:7px; } .statistics-month-selector input { width:150px; } .statistics-month-selector label { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); } }

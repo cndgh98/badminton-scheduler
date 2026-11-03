@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { AccountManagement, AttendanceStatistics } from './AccountsAndStats';
 import { Auth } from './OnlineApp';
 import { backend, registerAccount } from './backend';
@@ -45,4 +45,40 @@ test('signup requests approval without logging into the main application',async(
  fireEvent.click(screen.getByRole('button',{name:'가입하기'}));
  expect(await screen.findByText(/가입 신청이 완료됐습니다/)).toBeInTheDocument();
  expect(registerAccount).toHaveBeenCalled();expect(backend.auth.signInWithPassword).not.toHaveBeenCalled();
+});
+
+
+test('statistics support selecting a month and navigating across the year boundary',async()=>{
+ backend.rpc.mockResolvedValue({data:[],error:null});
+ render(<AttendanceStatistics userId="me"/>);
+ const picker=screen.getByLabelText('조회 월');
+ const current=picker.value;
+ fireEvent.change(picker,{target:{value:'2025-12'}});
+ await waitFor(()=>expect(backend.rpc).toHaveBeenLastCalledWith('monthly_attendance_ranking',{p_month:'2025-12-01'}));
+ expect(screen.getByRole('heading',{name:'2025년 12월 참석 랭킹'})).toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'다음 달 통계'}));
+ await waitFor(()=>expect(backend.rpc).toHaveBeenLastCalledWith('monthly_attendance_ranking',{p_month:'2026-01-01'}));
+ fireEvent.click(screen.getByRole('button',{name:'이전 달 통계'}));
+ await waitFor(()=>expect(picker.value).toBe('2025-12'));
+ fireEvent.click(screen.getByRole('button',{name:'이번 달'}));
+ await waitFor(()=>expect(backend.rpc).toHaveBeenLastCalledWith('monthly_attendance_ranking',{p_month:`${current}-01`}));
+ expect(screen.getByRole('button',{name:'다음 달 통계'})).toBeDisabled();
+});
+
+test('a late response from an older month cannot overwrite the selected months rankings',async()=>{
+ let resolveOlder,resolveSelected;
+ backend.rpc.mockResolvedValueOnce({data:[{rank:1,user_id:'me',name:'현재회원',attendance_count:3}],error:null})
+ .mockImplementationOnce(()=>new Promise(resolve=>{resolveOlder=resolve;}))
+ .mockImplementationOnce(()=>new Promise(resolve=>{resolveSelected=resolve;}));
+ render(<AttendanceStatistics userId="me"/>);
+ expect(await screen.findByText('현재회원')).toBeInTheDocument();
+ fireEvent.change(screen.getByLabelText('조회 월'),{target:{value:'2025-12'}});
+ expect(screen.queryByText('현재회원')).not.toBeInTheDocument();
+ fireEvent.change(screen.getByLabelText('조회 월'),{target:{value:'2025-11'}});
+ await act(async()=>resolveSelected({data:[{rank:1,user_id:'me',name:'선택월회원',attendance_count:2}],error:null}));
+ expect(screen.getByText('2회')).toBeInTheDocument();
+ await act(async()=>resolveOlder({data:[{rank:1,user_id:'me',name:'이전월회원',attendance_count:8}],error:null}));
+ expect(screen.getByText('선택월회원')).toBeInTheDocument();
+ expect(screen.queryByText('이전월회원')).not.toBeInTheDocument();
+ expect(screen.getByRole('heading',{name:'2025년 11월 참석 랭킹'})).toBeInTheDocument();
 });
