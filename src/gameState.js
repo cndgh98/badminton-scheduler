@@ -4,7 +4,7 @@ export const playerKey = player => `${player.name} · ${player.user_id.slice(0, 
 export function prepareGameState(saved, roster) {
   const state = saved || {};
   const playerProfiles = { ...(state.playerProfiles || {}) };
-  for (const player of roster) playerProfiles[playerKey(player)] = { user_id: player.user_id, name: player.name, gender: player.gender || playerProfiles[playerKey(player)]?.gender };
+  for (const player of roster) playerProfiles[playerKey(player)] = { user_id: player.user_id, name: player.name, gender: player.is_guest ? null : player.gender || playerProfiles[playerKey(player)]?.gender, ...(player.is_guest ? { is_guest: true, host_id: player.host_id, guest_number: player.guest_number } : {}) };
   const confirmed = roster.filter(player => player.status === 'confirmed').map(playerKey);
   const excluded = new Set(state.excludedPlayers || []);
   const confirmedSet = new Set(confirmed.filter(key => !excluded.has(key)));

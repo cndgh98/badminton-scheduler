@@ -25,7 +25,8 @@
     "test": "react-scripts test",
     "test:database": "node scripts/test-database.mjs",
     "test:requests": "node scripts/test-game-requests.mjs",
-    "test:accounts": "node scripts/test-accounts.mjs"
+    "test:accounts": "node scripts/test-accounts.mjs",
+    "test:guests": "node scripts/test-guests.mjs"
   },
   "eslintConfig": {
     "extends": [

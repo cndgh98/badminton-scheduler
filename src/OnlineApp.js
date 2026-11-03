@@ -4,6 +4,7 @@ import GameBoard from './GameBoard';
 import { prepareGameState, gameStateFingerprint } from './gameState';
 import { MemberGameRequests, AdminGameRequests } from './GameRequests';
 import MatchOverview from './MatchOverview';
+import GuestAttendance from './GuestAttendance';
 import { AccountManagement, AttendanceStatistics } from './AccountsAndStats';
 import { backend, koreaDate, loginEmail, unwrap, registerAccount } from './backend';
 import './OnlineApp.css';
@@ -131,6 +132,7 @@ export default function OnlineApp() {
   const [attendance, setAttendance] = useState([]);
   const [selected, setSelected] = useState(null);
   const [roster, setRoster] = useState([]);
+  const [guestsReady, setGuestsReady] = useState(false);
   const [requests, setRequests] = useState([]);
   const [requestsReady, setRequestsReady] = useState(false);
   const [requestError, setRequestError] = useState('');
@@ -167,11 +169,16 @@ export default function OnlineApp() {
   }, [session]);
   const loadRoster = useCallback(async () => {
     if (!selected) return;
-    let people = unwrap(await backend.rpc('roster', { p_meeting: selected }));
+    let result = await backend.rpc('meeting_roster', { p_meeting: selected });
+    if (result.error?.code === 'PGRST202') {
+      setGuestsReady(false);
+      result = await backend.rpc('roster', { p_meeting: selected });
+    } else if (!result.error) setGuestsReady(true);
+    let people = unwrap(result);
     if (profile?.role === 'admin' && people.length) {
       const profiles = unwrap(await backend.from('profiles').select('id,gender').in('id', people.map(p => p.user_id)));
       const genders = Object.fromEntries(profiles.map(p => [p.id, p.gender]));
-      people = people.map(p => ({ ...p, gender: genders[p.user_id] }));
+      people = people.map(p => ({ ...p, gender: p.is_guest ? null : genders[p.user_id] }));
     }
     setRoster(people);
   }, [selected, profile?.role]);
@@ -194,10 +201,10 @@ export default function OnlineApp() {
     return () => clearInterval(timer);
   }, [loadRequests, session, selected]);
   useEffect(() => { if (!session) return; let live = true; const refresh = () => { load().catch(e => { if (live) setError(e.message); }); }; refresh(); const timer = setInterval(refresh, 15000); return () => { live = false; clearInterval(timer); }; }, [load, session]);
-  useEffect(() => { setRoster([]); if (!session || !selected) return; const refresh = () => loadRoster().catch(e => setError(e.message)); refresh(); const timer = setInterval(refresh, 15000); return () => clearInterval(timer); }, [selected, session, loadRoster]);
+  useEffect(() => { setRoster([]); setGuestsReady(false); if (!session || !selected) return; const refresh = () => loadRoster().catch(e => setError(e.message)); refresh(); const timer = setInterval(refresh, 15000); return () => clearInterval(timer); }, [selected, session, loadRoster]);
   const meeting = meetings.find(m => m.id === selected);
   const meetingRequests = requests.filter(request => request.meeting_id === selected);
-  const mine = attendance.find(a => a.meeting_id === selected && a.user_id === session?.user.id);
+  const mine = attendance.find(a => a.meeting_id === selected && a.user_id === session?.user.id && !a.guest_number);
   const confirmed = attendance.filter(a => a.meeting_id === selected && a.status === 'confirmed').length;
   const waiting = roster.filter(r => r.status === 'waiting');
   const visible = meetings.filter(m => koreaDate(m.starts_at).startsWith(month) && (!day || koreaDate(m.starts_at) === day));
@@ -218,8 +225,11 @@ export default function OnlineApp() {
     }); }}><label>모임 이름<input name="title" required maxLength={100} /></label><label>일시 · 한국 시간<input name="starts_at" type="datetime-local" required /></label><label>장소<input name="location" required maxLength={200} /></label><label>참석 정원<input name="capacity" type="number" defaultValue="20" min="1" max="500" required /></label><button disabled={busy}>등록하기</button></form></section>}
     <div className="club-grid"><section className="panel"><div className="month-nav"><button className="quiet" onClick={() => shiftMonth(-1)} aria-label="이전 달">←</button><h2>{month.replace('-', '년 ')}월</h2><button className="quiet" onClick={() => shiftMonth(1)} aria-label="다음 달">→</button></div><div className="calendar">{['일','월','화','수','목','금','토'].map(d => <span className="weekday" key={d}>{d}</span>)}{Array.from({ length: first }, (_, i) => <span key={`blank-${i}`} />)}{Array.from({ length: days }, (_, i) => { const date = `${month}-${String(i + 1).padStart(2, '0')}`; const count = meetings.filter(m => koreaDate(m.starts_at) === date && !m.cancelled).length; return <button key={date} aria-label={`${date}${count ? ` 모임 ${count}개` : ''}`} aria-pressed={day === date} className={`${day === date ? 'selected' : ''} ${date === koreaDate() ? 'today' : ''}`} onClick={() => setDay(day === date ? null : date)}>{i + 1}<span>{count ? '●' : '\u00a0'}</span></button>; })}</div><button className="quiet" onClick={() => setDay(null)}>이번 달 전체 보기</button><div className="meeting-list">{!visible.length && <p className="muted">등록된 모임이 없습니다.</p>}{visible.map(m => <button className={`meeting-item ${selected === m.id ? 'active' : ''}`} key={m.id} onClick={() => { setSelected(m.id); }}><span>{new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(m.starts_at))}</span><strong>{m.title}</strong><span>{m.cancelled ? '취소된 모임' : `${m.location} · ${attendance.filter(a => a.meeting_id === m.id && a.status === 'confirmed').length}/${m.capacity}명`}</span></button>)}</div></section>
     <section className="panel details">{!meeting ? <div className="empty"><span>🏸</span><h2>어떤 날 함께할까요?</h2><p>달력에서 모임을 선택해 주세요.</p></div> : <><span className="eyebrow">MEETING</span><h2>{meeting.title}</h2><p>{new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', dateStyle: 'full', timeStyle: 'short' }).format(new Date(meeting.starts_at))}</p><p>{meeting.location}</p><div className="capacity"><strong>참석 {confirmed} / {meeting.capacity}명</strong><span>대기 {waiting.length}명</span></div>
-    {meeting.cancelled ? <p className="notice">취소된 모임입니다.</p> : <><button className="wide" disabled={busy || (!mine && new Date(meeting.starts_at) <= new Date())} onClick={() => run(async () => { unwrap(await backend.rpc('reserve', { p_meeting: meeting.id, p_cancel: Boolean(mine) })); await Promise.all([load(), loadRoster()]); })}>{mine ? mine.status === 'confirmed' ? '참석 취소' : `대기 ${waiting.findIndex(r => r.user_id === session.user.id) + 1 || '…'}번 · 대기 취소` : new Date(meeting.starts_at) <= new Date() ? '신청 마감' : confirmed >= meeting.capacity ? '대기 신청' : '참석하기'}</button><small>빈자리가 생기면 대기 신청 순서대로 자동 참석 처리됩니다. 정보는 15초마다 갱신됩니다.</small></>}
-    <h3>참석자</h3><div className="people">{roster.filter(r => r.status === 'confirmed').map(r => <span key={r.user_id}>{r.name}{r.user_id === session.user.id ? ' (나)' : ''}</span>)}{!confirmed && <p className="muted">첫 번째 참석자가 되어 주세요.</p>}</div><h3>모임 참석 대기 순서</h3>{waiting.length ? <ol className="reservation-waitlist">{waiting.map((r, index) => <li key={r.user_id}><strong>{index + 1}번</strong> {r.name}{r.user_id === session.user.id ? ' (나)' : ''}</li>)}</ol> : <p className="muted">모임 참석 대기자가 없습니다.</p>}
+    {meeting.cancelled ? <p className="notice">취소된 모임입니다.</p> : <><button className="wide" disabled={busy || (!mine && new Date(meeting.starts_at) <= new Date())} onClick={() => run(async () => { const guestCount = attendance.filter(a => a.meeting_id === meeting.id && a.user_id === session.user.id && a.guest_number).length;
+      if (mine && guestCount && !window.confirm(`본인 참석을 취소하면 동반 게스트 ${guestCount}명도 함께 취소됩니다. 취소할까요?`)) return;
+      unwrap(await backend.rpc('reserve', { p_meeting: meeting.id, p_cancel: Boolean(mine) })); await Promise.all([load(), loadRoster()]); })}>{mine ? mine.status === 'confirmed' ? '참석 취소' : `대기 ${waiting.findIndex(r => r.user_id === session.user.id) + 1 || '…'}번 · 대기 취소` : new Date(meeting.starts_at) <= new Date() ? '신청 마감' : confirmed >= meeting.capacity ? '대기 신청' : '참석하기'}</button><small>빈자리가 생기면 대기 신청 순서대로 자동 참석 처리됩니다. 정보는 15초마다 갱신됩니다.</small></>}
+    <GuestAttendance meeting={meeting} host={{ id: session.user.id, name: profile.name }} attendance={attendance.filter(row => row.meeting_id === selected)} roster={roster} ready={guestsReady} busy={busy} run={run} reload={async () => { await Promise.all([load(), loadRoster()]); }} />
+    <h3>참석자</h3><div className="people">{roster.filter(r => r.status === 'confirmed').map(r => <span key={r.user_id}>{r.name}{r.user_id === session.user.id ? ' (나)' : r.host_id === session.user.id ? ' (내 게스트)' : ''}</span>)}{!confirmed && <p className="muted">첫 번째 참석자가 되어 주세요.</p>}</div><h3>모임 참석 대기 순서</h3>{waiting.length ? <ol className="reservation-waitlist">{waiting.map((r, index) => <li key={r.user_id}><strong>{index + 1}번</strong> {r.name}{r.user_id === session.user.id ? ' (나)' : r.host_id === session.user.id ? ' (내 게스트)' : ''}</li>)}</ol> : <p className="muted">모임 참석 대기자가 없습니다.</p>}
     {admin && !meeting.cancelled && <div className="admin-actions"><button disabled={busy || koreaDate(meeting.starts_at) !== koreaDate()} onClick={() => run(async () => { await Promise.all([load(), loadRoster(), loadRequests()]); setGame(true); })}>경기 운영 시작</button><small>경기 운영은 한국 시간 기준 모임 당일에 열립니다.</small><button className="quiet danger" disabled={busy} onClick={() => { if (window.confirm('이 모임을 취소할까요?')) run(async () => { unwrap(await backend.rpc('cancel_meeting', { p_meeting: meeting.id })); await load(); }); }}>모임 취소</button></div>}
     <MatchOverview gameState={meeting.game_state} userId={session.user.id} />
     {requestError && <p role="alert">{requestError}</p>}

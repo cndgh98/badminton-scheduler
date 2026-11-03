@@ -3,7 +3,7 @@ import OnlineApp from './OnlineApp';
 import { backend } from './backend';
 jest.mock('./backend', () => ({ ...jest.requireActual('./backend'), backend: { auth: { getSession:jest.fn(),onAuthStateChange:jest.fn() },from:jest.fn(),rpc:jest.fn() } }));
 const userId='12345678-user';
-function setup(role='member', attendanceStatus='confirmed') {
+function setup(role='member', attendanceStatus='confirmed', customAttendance=null) {
   const meeting={id:'m1',title:'테스트 모임',location:'체육관',starts_at:new Date().toISOString(),capacity:20,game_state:{courts:[{id:1,name:'코트 1',team:['회원 · 12345678']}],playerProfiles:{'회원 · 12345678':{name:'회원',user_id:userId}}}};
   backend.auth.getSession.mockResolvedValue({data:{session:{user:{id:userId}}}});
   backend.auth.onAuthStateChange.mockReturnValue({data:{subscription:{unsubscribe:jest.fn()}}});
@@ -11,7 +11,7 @@ function setup(role='member', attendanceStatus='confirmed') {
   backend.from.mockImplementation(table=>({select:()=>{
     if(table==='profiles')return {eq:()=>({single:async()=>({data:{id:userId,name:'회원',role},error:null})})};
     if(table==='meetings')return {order:async()=>({data:[meeting],error:null})};
-    if(table==='attendance')return Promise.resolve({data:attendanceStatus?[{meeting_id:'m1',user_id:userId,status:attendanceStatus}]:[],error:null});
+    if(table==='attendance')return Promise.resolve({data:customAttendance || (attendanceStatus?[{meeting_id:'m1',user_id:userId,status:attendanceStatus}]:[]),error:null});
     if(table==='game_requests')return {eq:()=>({order:async()=>({data:[],error:null})})};
     throw new Error(table);
   }}));
@@ -44,4 +44,17 @@ test('all members see statistics but account management is restricted to admins'
 test('admin navigation includes account management',async()=>{
  setup('admin');await openMeeting();
  expect(screen.getByRole('button',{name:'계정관리'})).toBeInTheDocument();
+});
+
+test('host attendance is not confused with a guest row and host cancellation warns about all guests',async()=>{
+ setup('member','confirmed',[
+  {meeting_id:'m1',user_id:userId,guest_number:1,participant_id:'guest1',status:'waiting'},
+  {meeting_id:'m1',user_id:userId,guest_number:null,status:'confirmed'},
+ ]);
+ await openMeeting();
+ const confirm=jest.spyOn(window,'confirm').mockReturnValue(false);
+ await act(async()=>fireEvent.click(screen.getByRole('button',{name:'참석 취소'})));
+ expect(confirm).toHaveBeenCalledWith('본인 참석을 취소하면 동반 게스트 1명도 함께 취소됩니다. 취소할까요?');
+ expect(backend.rpc).not.toHaveBeenCalledWith('reserve',expect.anything());
+ confirm.mockRestore();
 });

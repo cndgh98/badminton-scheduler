@@ -89,3 +89,10 @@
 .admin-game-requests article { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-top:1px solid #eee5c7; font-size:13px; }
 .club .admin-game-requests small { font-size:11px; margin-top:5px; }
 @media(max-width:720px) { .member-game-actions>.quiet { width:100%; } .member-request-actions { width:100%; } .admin-game-requests article { align-items:flex-start; flex-direction:column; } }
+.guest-attendance { border:1px solid #dce4da; padding:16px; border-radius:12px; margin:18px 0; background:#f8faf5; }
+.guest-attendance>div:first-child { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.club .guest-attendance h3 { margin:0; font-size:14px; }
+.guest-attendance h3 span { font-size:11px; color:#7c8b74; margin-left:5px; }
+.club .guest-attendance button { font-size:11px; padding:9px 12px; }
+.guest-reservation { display:flex; justify-content:space-between; align-items:center; gap:10px; border-top:1px solid #e2e9dc; padding-top:12px; margin-top:12px; font-size:13px; }
+.club .guest-reservation small { margin-top:4px; font-size:11px; }

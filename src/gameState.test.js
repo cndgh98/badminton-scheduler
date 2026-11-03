@@ -34,3 +34,14 @@ test('excluded attendees are not imported again when the same meeting is reopene
   expect(reopened.participants).toEqual([playerKey(roster[1])]);
   expect(reopened.excludedPlayers).toEqual([excluded]);
 });
+test('confirmed guests enter the game as distinct players with the hosts numbered display names',()=>{
+ const host=player(1);
+ const guests=[1,2].map(n=>({user_id:`abcd000${n}-guest`,host_id:host.user_id,name:`${host.name}-G${n}`,status:'confirmed',is_guest:true,guest_number:n,gender:null}));
+ const state=prepareGameState(null,[host,...guests]);
+ expect(state.participants).toHaveLength(3);expect(new Set(state.participants).size).toBe(3);
+ for(const guest of guests){
+  const info=state.playerProfiles[playerKey(guest)];
+  expect(info.name).toBe(`${host.name}-G${guest.guest_number}`);
+  expect(info.host_id).toBe(host.user_id);expect(info.is_guest).toBe(true);expect(info.gender).toBeNull();
+ }
+});
