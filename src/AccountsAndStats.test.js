@@ -36,7 +36,7 @@ test('monthly statistics show tied rankings and the current members count',async
  expect(backend.rpc).toHaveBeenCalledWith('monthly_attendance_ranking',expect.objectContaining({p_month:expect.stringMatching(/^\d{4}-\d{2}-01$/)}));
 });
 test('signup requests approval without logging into the main application',async()=>{
- backend.rpc.mockResolvedValue({data:true,error:null});registerAccount.mockResolvedValue({data:{user:{id:'new'}},error:null});
+ backend.rpc.mockResolvedValue({data:true,error:null});registerAccount.mockResolvedValue({data:{user:null,session:null},error:null,approvalPending:true});
  render(<Auth run={run} busy={false}/>);
  fireEvent.click(screen.getByRole('button',{name:'처음 오셨나요? 회원가입'}));
  fireEvent.change(screen.getByLabelText('이름'),{target:{value:'새회원'}});
@@ -81,4 +81,32 @@ test('a late response from an older month cannot overwrite the selected months r
  expect(screen.getByText('선택월회원')).toBeInTheDocument();
  expect(screen.queryByText('이전월회원')).not.toBeInTheDocument();
  expect(screen.getByRole('heading',{name:'2025년 11월 참석 랭킹'})).toBeInTheDocument();
+});
+
+
+test('duplicate signup remains a failure with guidance instead of a false completion message',async()=>{
+ backend.rpc.mockResolvedValue({data:true,error:null});
+ registerAccount.mockResolvedValue({data:{user:null,session:null},error:{code:'user_already_exists',message:'User already registered'}});
+ const errors=[];
+ render(<Auth run={action=>action().catch(error=>errors.push(error.message))} busy={false}/>);
+ fireEvent.click(screen.getByRole('button',{name:'처음 오셨나요? 회원가입'}));
+ fireEvent.change(screen.getByLabelText('이름'),{target:{value:'새회원'}});
+ fireEvent.change(screen.getByLabelText('아이디'),{target:{value:'newuser'}});
+ fireEvent.change(screen.getByLabelText('비밀번호'),{target:{value:'password123'}});
+ fireEvent.click(screen.getByRole('button',{name:'가입하기'}));
+ await waitFor(()=>expect(errors[0]).toMatch(/이미 사용 중인 아이디/));
+ expect(screen.queryByText(/가입 신청이 완료됐습니다/)).not.toBeInTheDocument();
+ expect(screen.getByRole('button',{name:'가입하기'})).toBeInTheDocument();
+});
+
+test('approval denial during ordinary login still blocks access and never reports signup success',async()=>{
+ backend.auth.signInWithPassword.mockResolvedValue({data:{session:null},error:{status:403,message:'관리자 승인 대기 중이거나 삭제된 계정입니다.'}});
+ const errors=[];
+ render(<Auth run={action=>action().catch(error=>errors.push(error.message))} busy={false}/>);
+ fireEvent.change(screen.getByLabelText('아이디'),{target:{value:'newuser'}});
+ fireEvent.change(screen.getByLabelText('비밀번호'),{target:{value:'password123'}});
+ fireEvent.click(screen.getByRole('button',{name:'로그인'}));
+ await waitFor(()=>expect(errors).toEqual(['관리자 승인 대기 중이거나 삭제된 계정입니다.']));
+ expect(registerAccount).not.toHaveBeenCalled();
+ expect(screen.queryByText(/가입 신청이 완료됐습니다/)).not.toBeInTheDocument();
 });

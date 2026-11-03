@@ -17,15 +17,20 @@ export function Auth({ run, busy }) {
       if (signup) {
         const policy = await backend.rpc('account_signup_policy');
         if (policy.error || policy.data !== true) throw new Error('가입 승인 기능을 설정 중입니다. 운영자에게 문의해 주세요.');
-        unwrap(await registerAccount({ email: loginEmail(f.username), password: f.password, options: { data: { username: f.username.trim().toLowerCase(), name: f.name.trim(), gender: f.gender } } }));
-        setSignup(false); setMessage('가입 신청이 완료됐습니다. 관리자 승인 후 로그인해 주세요.');
+        const username = f.username.trim().toLowerCase();
+        const result = await registerAccount({ email: loginEmail(username), password: f.password, options: { data: { username, name: f.name.trim(), gender: f.gender } } });
+        if (result.error?.code === 'user_already_exists' || result.error?.message === 'User already registered') {
+          throw new Error('이미 사용 중인 아이디입니다. 이전에 가입 신청했다면 관리자에게 승인 여부를 확인해 주세요.');
+        }
+        unwrap(result);
+        setSignup(false); setMessage(`${username} 계정의 가입 신청이 완료됐습니다. 관리자 승인 대기 중입니다. 승인 후 로그인해 주세요.`);
       } else unwrap(await backend.auth.signInWithPassword({ email: loginEmail(f.username), password: f.password }));
     }); }}>
       {signup && <><label>이름<input name="name" required maxLength={40} autoComplete="name" /></label><label>성별<select name="gender"><option>남성</option><option>여성</option></select></label></>}
       <label>아이디<input name="username" required pattern="[a-zA-Z0-9_]{4,24}" title="영문, 숫자, 밑줄 4~24자" autoComplete="username" autoCapitalize="none" /></label>
       <label>비밀번호<input name="password" type="password" minLength={8} maxLength={72} required autoComplete={signup ? 'new-password' : 'current-password'} /></label>
       <button disabled={busy}>{busy ? '처리 중…' : signup ? '가입하기' : '로그인'}</button>
-    </form><button className="quiet" onClick={() => setSignup(!signup)}>{signup ? '로그인으로 돌아가기' : '처음 오셨나요? 회원가입'}</button>
+    </form><button className="quiet" onClick={() => { setSignup(!signup); setMessage(''); }}>{signup ? '로그인으로 돌아가기' : '처음 오셨나요? 회원가입'}</button>
     <small>비밀번호를 잊으셨다면 운영자에게 문의하세요.</small></section>;
 }
 

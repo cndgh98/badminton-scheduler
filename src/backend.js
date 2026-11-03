@@ -17,6 +17,16 @@ export async function registerAccount(details) {
   // A separate, nonpersistent client prevents signup from logging in the main app.
   const client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'badminton-registration' } });
   const result = await client.auth.signUp(details);
-  if (result.data?.session) await client.auth.signOut({ scope: 'local' });
+  // GoTrue commits the new user before issuing the automatic password-grant token.
+  // Our approval hook can reject that token even though registration succeeded.
+  // Interpret only this specific signup-stage denial, never ordinary auth failures.
+  if (result.error?.status === 403 && result.error.message?.includes('관리자 승인 대기 중')) {
+    return { data: { user: null, session: null }, error: null, approvalPending: true };
+  }
+  if (result.data?.session) {
+    try { await client.auth.signOut({ scope: 'local' }); } catch {
+      // Cleanup of this nonpersistent client must not turn a committed signup into a failure.
+    }
+  }
   return result;
 }
